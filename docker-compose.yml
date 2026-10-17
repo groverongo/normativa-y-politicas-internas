@@ -2,11 +2,12 @@
 # module's own .env file. Each module stays independent -- no shared network
 # dependency between them beyond what's defined here.
 #
-#   ./docker-up.sh                 # build + start both modules + local db
+#   ./docker-up.sh                 # build + start all modules + local db
 #   ./docker-up.sh up --build api  # pass any args through to `docker compose`
 #
-# Host ports are overridable via INGESTA_PORT / NTTBANCA_PORT / DB_PORT env
-# vars in case 8000/8001/5433 are already taken on your machine.
+# Host ports are overridable via INGESTA_PORT / NTTBANCA_PORT /
+# NTTDATABANCA_PORT / DB_PORT env vars in case 8000/8001/8002/5433 are
+# already taken on your machine.
 #
 # Local Postgres: both modules' .env files point DB_HOST at a remote AWS RDS
 # instance by default. The `environment:` overrides below replace those with
@@ -14,6 +15,10 @@
 # ingesta and nttbanca-n now share ONE database and ONE migration sequence
 # (modules/nttbanca-n/migrations/, see its README) -- the `migrate` service
 # below applies it once before either app starts.
+#
+# nttdatabanca is fully independent: it talks to Qdrant Cloud (not the local
+# `db` Postgres) for vector search, so it loads its own .env and has no
+# depends_on here.
 
 services:
   db:
@@ -89,6 +94,19 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  nttdatabanca:
+    build:
+      context: ./modules/nttdatabanca
+      target: runtime
+    image: nttdatabanca-api
+    env_file:
+      - ./modules/nttdatabanca/.env
+    ports:
+      - "${NTTDATABANCA_PORT:-8002}:8080"
+    volumes:
+      - ./modules/nttdatabanca/registry.json:/app/registry.json
+      - ./modules/nttdatabanca/evals.json:/app/evals.json:ro
 
 volumes:
   pgdata:

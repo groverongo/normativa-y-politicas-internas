@@ -9,6 +9,7 @@ This repository is a monorepo with three independent modules:
 - `modules/ingesta/` -- the "B2 Normativa" regulatory-document ingestion pipeline. See `modules/ingesta/CLAUDE.md` for its architecture, gotchas, and commands. Has its own `Makefile`.
 - `modules/nttbanca-n/` -- imported via `git subtree` from `https://github.com/AaronAP1/NttBanca_N` (full history preserved under `modules/nttbanca-n/`). See `modules/nttbanca-n/CLAUDE.md` for its architecture and commands. Has its own `Makefile`.
 - `modules/design-to-dev-dart/` -- imported via `git subtree` from `https://github.com/jchinchayrobles-design/design-to-dev-dart` (full history preserved under `modules/design-to-dev-dart/`). A Vite/React frontend scaffolded with Lovable. Read its own `README.md` for how to run it; it does not yet have a `Makefile` or a `CLAUDE.md`.
+- `modules/nttdatabanca/` -- imported via `git subtree` from `https://github.com/imjowend/nttdatabanca` (squashed, full history not preserved). A standalone Go RAG service over SBS regulatory docs + internal policies (Qdrant for vector search, Voyage/Jina for embeddings+rerank, an OpenAI-compatible LLM). Read its own `README.md` for setup and run commands; it does not yet have a `Makefile` or a `CLAUDE.md`.
 
 Each module is self-contained: its own dependencies, `.venv`, `.env`, Dockerfile, and `.gitignore` live under its own directory. There is no shared build step or shared dependency file at the repo root.
 
@@ -49,4 +50,13 @@ Same situation as `nttbanca-n`: merged in with `git subtree`, no separate `.git`
 ```bash
 git subtree pull --prefix=modules/design-to-dev-dart https://github.com/jchinchayrobles-design/design-to-dev-dart main
 git subtree push --prefix=modules/design-to-dev-dart https://github.com/jchinchayrobles-design/design-to-dev-dart <branch>
+```
+
+## Working with modules/nttdatabanca
+
+Same situation as the other subtree modules: merged in with `git subtree` (squashed), no separate `.git` to manage.
+
+```bash
+git subtree pull --prefix=modules/nttdatabanca https://github.com/imjowend/nttdatabanca main --squash
+git subtree push --prefix=modules/nttdatabanca https://github.com/imjowend/nttdatabanca <branch>
 ```
