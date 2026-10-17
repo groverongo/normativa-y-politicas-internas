@@ -1,0 +1,41 @@
+# Opcional: PostgreSQL local en Docker en lugar de RDS. S3 sigue siendo el bucket de AWS del .env.
+# Sirve para probar sin tocar la base compartida ni depender de la conexión a RDS.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local-db.yml up --build
+#
+# La API aplica las migraciones al arrancar, así que la base local queda lista sola.
+# Desde la PC (DBeaver, psql): localhost:5433, base/usuario/contraseña "nttbanca".
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: nttbanca
+      POSTGRES_USER: nttbanca
+      POSTGRES_PASSWORD: nttbanca
+    ports:
+      - "5433:5432"
+    volumes:
+      # En la imagen de Postgres 18 el volumen se monta en /var/lib/postgresql (no en .../data)
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nttbanca -d nttbanca"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    # Tienen prioridad sobre los valores DB_* del .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: nttbanca
+      DB_USER: nttbanca
+      DB_PASSWORD: nttbanca
+      DB_SSLMODE: disable
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

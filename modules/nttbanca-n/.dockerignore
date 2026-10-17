@@ -1,0 +1,19 @@
+# Solo app/, migrations/ y requirements.txt entran a la imagen
+.git
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+
+# Secretos: la configuración se pasa al contenedor, no se copia a la imagen
+.env
+.env.*
+!.env.example
+.aws-s3-policy.json
+.deploy-tmp
+
+tests
+docs
+scripts
+*.md

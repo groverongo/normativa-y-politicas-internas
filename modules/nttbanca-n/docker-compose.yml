@@ -1,0 +1,23 @@
+# API en Docker usando la configuración del .env (RDS y S3 de AWS).
+#   docker compose up --build            levanta la API en http://localhost:8000
+#   docker compose up --build --watch    además reinicia la API al guardar cambios en app/
+#
+# Para usar un Postgres local en lugar de RDS, agrega docker-compose.local-db.yml (ver ese archivo).
+
+services:
+  api:
+    build: .
+    image: nttbanca-api
+    env_file: .env
+    ports:
+      - "8000:8000"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./app
+          target: /app/app
+        - action: sync+restart
+          path: ./migrations
+          target: /app/migrations
+        - action: rebuild
+          path: requirements.txt

@@ -1,0 +1,5 @@
+fastapi[standard]==0.143.3
+SQLAlchemy==2.1.5
+psycopg[binary]==3.3.6
+boto3==1.43.114
+pydantic-settings==2.16.0
