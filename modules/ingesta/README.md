@@ -270,9 +270,11 @@ implementations, selected by `STORAGE_BACKEND` via `get_storage(settings)`:
 - `S3DbStorage` (`STORAGE_BACKEND=postgres`) -- the real backend: raw text is
   stored as S3 objects (`get_document_text`/`put_document`, keyed by
   `{S3_PREFIX}{doc_id}.txt`, recorded on `documents.source_uri`), and the
-  metadata graph lives in Postgres per `migrations/*.sql` (`documents`,
-  `chunks`, `document_lineage`, `document_definition_sources`,
-  `document_patches`). `resolve_doc_id` matches on `doc_id`/suffix via SQL;
+  metadata graph lives in Postgres per the one shared migration sequence in
+  `../nttbanca-n/migrations/*.sql` (`documents`, `chunks`, `document_lineage`,
+  `document_definition_sources`, `document_patches`; run `make migrate` from
+  the repo root before using this backend -- this module no longer
+  auto-creates its schema). `resolve_doc_id` matches on `doc_id`/suffix via SQL;
   `find_active_documents_referencing_term` checks `referenced_terms` then
   falls back to an `ILIKE` scan over `chunks.text`. `psycopg` and `boto3` are
   lazily imported (like the real LLM providers below), so they're only
