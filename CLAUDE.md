@@ -4,41 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A hackathon-scale multi-agent pipeline ("B2 Normativa") that ingests one regulatory document (SBS/BCP resolutions, circulars, errata, ...) at a time, classifies it into one of 9 `LifecycleCase`s, extracts its effects, validates references against existing storage, and mutates a metadata graph (status, lineage, patches, review flags). `README.md` is detailed and accurate (architecture diagram, the authoritative case -> operations table in section 5, loop bounds, log format); read it before changing behavior rather than re-deriving it from code.
+This repository is a monorepo with two independent modules, each with its own `CLAUDE.md`:
+
+- `modules/ingesta/` -- the "B2 Normativa" regulatory-document ingestion pipeline. See `modules/ingesta/CLAUDE.md` for its architecture, gotchas, and commands. Has its own `Makefile`.
+- `modules/nttbanca-n/` -- imported via `git subtree` from `https://github.com/AaronAP1/NttBanca_N` (full history preserved under `modules/nttbanca-n/`). Read its own `README.md` for what it is and how to run it; it does not yet have a `Makefile` or a `CLAUDE.md`.
+
+Each module is self-contained: its own dependencies, `.venv`, `.env`, Dockerfile, and `.gitignore` live under its own directory. There is no shared build step or shared dependency file at the repo root.
 
 ## Commands
 
-Flat Python modules at the repo root, no package install or build step. Use the existing `.venv`.
-
 ```bash
-pip install -r requirements.txt            # pydantic + python-dotenv; provider SDKs / pdfplumber are optional (commented out)
-cp .env.example .env                       # defaults to LLM_PROVIDER=mock, no API key needed
-
-python smoke_test.py                       # the only test suite: plain asserts, no pytest; forces LLM_PROVIDER=mock
-python main.py ingest sample_docs/examples --seed sample_docs/seed_corpus.json
-python main.py trace runs/<run_id>/interaction_log.jsonl
+make help                    # list root-level targets
+make install                 # install dependencies for every module that has a Makefile
+make test                    # run tests for every module that has a Makefile
+make -C modules/ingesta help  # see modules/ingesta/Makefile for the full per-module target list
 ```
 
-`smoke_test.py` has no test selector: each `test_*` function is called from `main()` (line ~504). To run one, import it in a Python one-liner, e.g. `python -c "import smoke_test as s; s.test_case_2_full_replacement()"`. There is no linter or formatter configured.
+## Working with modules/nttbanca-n
 
-## Architecture (the parts that span files)
+That directory's history was merged in with `git subtree`, not a submodule -- there is no separate `.git` to manage and no `git submodule update` step. To pull upstream changes later:
 
-- **`pipeline.py` `IngestionPipeline` is the only mediator.** Agents (`agents/classifier|extraction|validation|graph_update.py`, all subclassing `agents/base.py` `BaseAgent`) never reference each other; they return pydantic values and the pipeline routes them. Both feedback loops and all their bounds live in `ingest_document()`:
-  - Loop 1 (`validation_to_classifier`): classify -> extract -> validate, retried up to `MAX_RECLASSIFY_ATTEMPTS`, with fixpoint detection; always ends with a usable result (missing refs become `MISSING_DEPENDENCY` flags, never a failure).
-  - Loop 2 (`graph_update_reinvoke`): case 9 only, depth fixed at 1, fan-out capped by `MAX_IMPACT_DOCS`.
-  - `ingest_document` must never raise; exceptions are caught into `IngestionResult.errors`.
-- **`schema.py` holds every data shape** (pydantic models, `LifecycleCase`, `GraphOperation`, `normalize_doc_id`). Treat it as a frozen contract shared by all modules.
-- **Graph mutation is deterministic, not LLM-driven.** `agents/graph_update.py:build_case_operations()` is a pure function mapping (case, extraction, validation report) -> `GraphOperation`s; it must stay in sync with the README section 5 table and is what `smoke_test.py` checks for all 9 cases. The first op is always `create_document(N)` with the new doc's lineage/flags/notes already baked in. `build_impact_operations()` does the same for loop-2 per-target ops.
-- **Two seams** let the rest of the code stay unchanged: `StorageInterface` (ABC in `storage.py`; `InMemoryStorage` is the default, no-setup implementation, and `S3DbStorage` is the real one -- raw text in S3, metadata graph in Postgres per `migrations/*.sql`, `psycopg`/`boto3` lazily imported -- selected via `STORAGE_BACKEND` through `get_storage(settings)`) and `LLMProvider.complete_json(...)` in `llm_provider.py` (`MockProvider` default; `anthropic`/`openai`/`gemini` register in `PROVIDERS` with lazily imported SDKs and JSON-schema-in-the-system-prompt instead of tool use). Agents call the LLM only through `BaseAgent._llm_json`, which validates output against the pydantic model, retries once with the error appended, and writes the `agent_call`/`agent_result` log rows.
-- **`logging_trace.py` `InteractionLogger`** writes `runs/<run_id>/interaction_log.jsonl` (the primary evidence artifact; every row has every key, `null` when unused), plus `summary.json` and `storage_snapshot.json` written by `main.py`. `runs/` is gitignored and a fresh directory is created per invocation.
-- **`config.py` `Settings`** is a frozen dataclass built by `Settings.from_env()` (loads `.env`); CLI flags override env, `None` overrides are ignored. API keys are read inside provider classes, not in `Settings`.
+```bash
+git subtree pull --prefix=modules/nttbanca-n https://github.com/AaronAP1/NttBanca_N main
+```
 
-## Gotchas
+To push local changes made under `modules/nttbanca-n/` back upstream (requires push access to that repo):
 
-- `ingest_document` resets `self.logger._doc_id = None` directly because `set_context()` ignores `None`; keep that reset or a previous document's id leaks onto the next document's early log rows.
-- Duplicate doc ids are disambiguated with `-DUP{n}` in `_assign_doc_id`, not rejected.
-- Directory ingestion is lexicographic and shares one storage across the run, so sample files are numbered (`01_`, `02_`, ...) to control order; later documents can cite earlier ones.
-- `MockProvider` is keyword/regex heuristics keyed off a first line `ID: <doc_id>` and an ISO date in the text; it exists to exercise all 9 cases and both loops offline. Changing mock heuristics can break `smoke_test.py`'s end-to-end check (`test_ingest_examples`).
-- `.pdf` inputs are skipped with a logged error unless `pdfplumber` is installed.
-- The sample regulatory documents are in Spanish; the README and code identifiers are English.
-- `.omc/` (gitignored) holds planning artifacts (`.omc/plans/autopilot-impl.md`) that code docstrings reference by section number; it may not exist in a fresh checkout.
+```bash
+git subtree push --prefix=modules/nttbanca-n https://github.com/AaronAP1/NttBanca_N <branch>
+```
