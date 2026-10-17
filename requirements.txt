@@ -1,0 +1,10 @@
+pydantic>=2.6
+python-dotenv>=1.0
+
+# Optional: only needed if you set LLM_PROVIDER to a real provider (see .env.example).
+# anthropic>=0.34.0
+# openai>=1.40.0
+# google-genai>=0.3.0
+
+# Optional: only needed to ingest .pdf source documents (see pipeline.load_document_text).
+# pdfplumber>=0.11.0

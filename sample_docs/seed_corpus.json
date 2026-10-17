@@ -1,0 +1,172 @@
+[
+  {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-1000-2020",
+        "chunk_index": 0,
+        "doc_type": "reglamento",
+        "title": "Reglamento de Atencion a Clientes en Condicion de Vulnerabilidad",
+        "issuer": "SBS",
+        "topic_tags": ["proteccion al consumidor", "conducta de mercado"],
+        "defined_terms": ["cliente vulnerable"],
+        "referenced_terms": ["cliente vulnerable"],
+        "source_uri": "s3://corpus-demo/sbs-res-1000-2020.pdf"
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2020-03-15",
+        "valid_until": null,
+        "version": "1.0",
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {
+          "cliente vulnerable": "SBS-RES-1000-2020"
+        }
+      }
+    },
+    "raw_text": "ID: SBS-RES-1000-2020\nResolucion SBS-RES-1000-2020\nFecha de publicacion: 2020-03-15\n\nReglamento de Atencion a Clientes en Condicion de Vulnerabilidad\n\nArticulo 1.- Objeto. El presente reglamento establece los lineamientos minimos que las empresas del sistema financiero deben observar para la atencion de clientes vulnerables.\n\nArticulo 2.- Definiciones. Para efectos del presente reglamento, se entiende por \"cliente vulnerable\" a toda persona natural que, por su edad, estado de salud, nivel educativo, discapacidad o situacion socioeconomica, se encuentre en una posicion de desventaja frente a la empresa del sistema financiero al momento de contratar o usar un producto o servicio financiero.\n\nArticulo 3.- Obligaciones. Las empresas supervisadas deben implementar canales de atencion preferente, lenguaje claro y procedimientos simplificados de reclamo para todo cliente vulnerable.\n\nEl presente reglamento entra en vigencia el 2020-03-15."
+  },
+  {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-2000-2021",
+        "chunk_index": 0,
+        "doc_type": "resolucion",
+        "title": "Resolucion sobre Limites de Comisiones por Mantenimiento de Cuenta de Ahorros",
+        "issuer": "SBS",
+        "topic_tags": ["comisiones", "cuentas de ahorro"],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": "s3://corpus-demo/sbs-res-2000-2021.pdf"
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2021-06-01",
+        "valid_until": null,
+        "version": "1.0",
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SBS-RES-2000-2021\nResolucion SBS-RES-2000-2021\nFecha de publicacion: 2021-06-01\n\nResolucion sobre Limites de Comisiones por Mantenimiento de Cuenta de Ahorros\n\nArticulo 1.- Las empresas del sistema financiero no podran cobrar una comision por mantenimiento de cuenta de ahorros superior al equivalente de 2.5% de la Unidad Impositiva Tributaria vigente.\n\nArticulo 2.- La presente resolucion rige a partir del 2021-06-01."
+  },
+  {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-2001-2021",
+        "chunk_index": 0,
+        "doc_type": "resolucion",
+        "title": "Resolucion sobre Plazos de Atencion de Reclamos",
+        "issuer": "SBS",
+        "topic_tags": ["reclamos", "atencion al cliente"],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": "s3://corpus-demo/sbs-res-2001-2021.pdf"
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2021-07-10",
+        "valid_until": null,
+        "version": "1.0",
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SBS-RES-2001-2021\nResolucion SBS-RES-2001-2021\nFecha de publicacion: 2021-07-10\n\nResolucion sobre Plazos de Atencion de Reclamos\n\nArticulo 5.- Las empresas del sistema financiero deben resolver los reclamos presentados por los usuarios en un plazo maximo de treinta (30) dias habiles contados desde la fecha de presentacion.\n\nArticulo 6.- La presente resolucion rige a partir del 2021-07-10."
+  },
+  {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "BCP-POL-0050-2022",
+        "chunk_index": 0,
+        "doc_type": "politica_interna",
+        "title": "Politica Interna de Atencion Preferente a Clientes Vulnerables",
+        "issuer": "BCP",
+        "topic_tags": ["atencion al cliente", "proteccion al consumidor"],
+        "defined_terms": [],
+        "referenced_terms": ["cliente vulnerable"],
+        "source_uri": "s3://corpus-demo/bcp-pol-0050-2022.pdf"
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2022-02-01",
+        "valid_until": null,
+        "version": "1.0",
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: BCP-POL-0050-2022\nPolitica interna BCP-POL-0050-2022\nFecha de publicacion: 2022-02-01\n\nPolitica Interna de Atencion Preferente a Clientes Vulnerables\n\n1. Objetivo. Esta politica interna desarrolla, en el ambito del banco, lo dispuesto por la SBS respecto de la atencion al cliente vulnerable.\n\n2. Alcance. Todo colaborador de atencion al publico debe identificar a un cliente vulnerable siguiendo los criterios de edad, discapacidad y situacion socioeconomica, y aplicar el protocolo de atencion preferente.\n\n3. Vigencia. La presente politica interna rige desde el 2022-02-01."
+  }
+]
