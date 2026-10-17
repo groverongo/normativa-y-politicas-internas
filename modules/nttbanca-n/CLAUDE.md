@@ -65,6 +65,17 @@ transaction, tracked in `schema_migrations` (see `app/db/migrate.py`). They also
 when `DB_AUTO_CREATE_TABLES=true` (default) and on every EC2 deploy. **Add a new numbered file for schema
 changes — never edit one already applied.**
 
+This is the repo's *one* shared migration sequence (see `migrations/README.md`): `modules/ingesta` reads and
+writes against the same `documents`/`chunks`/`document_lineage`/`document_definition_sources`/
+`document_patches` tables (0003-0007) via its own `storage.S3DbStorage`, and no longer has migrations of its
+own. From the repo root, `make migrate` / `make migrate-status` / `make migrate-dry-run` wrap this module's
+`python -m app.db.migrate` commands.
+
+Also note: `app/services/document_graph_storage.py`'s `Document.source_uri` is an S3 object key (raw text
+lives in S3 via `app/services/s3.py`'s `S3Service`, not inline in Postgres) — this was reconciled from an
+earlier `raw_text` column to match `modules/ingesta`'s original design, once both modules were unified onto
+one database.
+
 ### Agent pipeline (`app/services/orquestador.py`, `app/agentes/`)
 
 - `POST /consultas` returns `202` immediately with `{ejecucion_id, sesion_id, estado}` and runs the pipeline
