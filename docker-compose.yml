@@ -11,9 +11,9 @@
 # Local Postgres: both modules' .env files point DB_HOST at a remote AWS RDS
 # instance by default. The `environment:` overrides below replace those with
 # the local `db` service instead, so nothing here touches the real RDS.
-# ingesta and nttbanca-n keep separate databases on that same instance --
-# their `documents` table schemas have diverged (source_uri vs. raw_text),
-# so they can't share one database. See db-init/01-create-ingesta-db.sql.
+# ingesta and nttbanca-n now share ONE database and ONE migration sequence
+# (modules/nttbanca-n/migrations/, see its README) -- the `migrate` service
+# below applies it once before either app starts.
 
 services:
   db:
@@ -26,12 +26,28 @@ services:
       - "${DB_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql
-      - ./db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nttbanca -d nttbanca"]
       interval: 2s
       timeout: 3s
       retries: 30
+
+  migrate:
+    build:
+      context: ./modules/nttbanca-n
+    image: nttbanca-api
+    command: ["python", "-m", "app.db.migrate"]
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: nttbanca
+      DB_USER: nttbanca
+      DB_PASSWORD: nttbanca
+      DB_SSLMODE: disable
+      S3_BUCKET_NAME: unused
+    depends_on:
+      db:
+        condition: service_healthy
 
   ingesta:
     build:
@@ -43,7 +59,7 @@ services:
       STORAGE_BACKEND: postgres
       DB_HOST: db
       DB_PORT: "5432"
-      DB_NAME: ingesta
+      DB_NAME: nttbanca
       DB_USER: nttbanca
       DB_PASSWORD: nttbanca
       DB_SSLMODE: disable
@@ -52,8 +68,8 @@ services:
     volumes:
       - ./modules/ingesta/runs:/app/runs
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   nttbanca-n:
     build:
@@ -71,8 +87,8 @@ services:
     ports:
       - "${NTTBANCA_PORT:-8001}:8000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

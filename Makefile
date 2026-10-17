@@ -1,6 +1,6 @@
 MODULES := ingesta nttbanca-n
 
-.PHONY: help modules install test ingesta-install ingesta-test ingesta-ingest ingesta-api ingesta-trace ingesta-docker-build ingesta-docker-run
+.PHONY: help modules install test migrate migrate-status migrate-dry-run ingesta-install ingesta-test ingesta-ingest ingesta-api ingesta-trace ingesta-docker-build ingesta-docker-run
 
 help:
 	@echo "Monorepo root Makefile. Modules: $(MODULES)"
@@ -8,6 +8,11 @@ help:
 	@echo "  make modules            List module directories"
 	@echo "  make install            Run 'make install' in every module that has a Makefile"
 	@echo "  make test               Run 'make test' in every module that has a Makefile"
+	@echo ""
+	@echo "Database (one shared migration sequence for both modules -- see modules/nttbanca-n/migrations/README.md):"
+	@echo "  make migrate            Apply pending migrations"
+	@echo "  make migrate-status     Show applied vs. pending migrations"
+	@echo "  make migrate-dry-run    Apply + roll back all migrations, to validate a new one"
 	@echo ""
 	@echo "ingesta module shortcuts (see modules/ingesta/Makefile for the full list):"
 	@echo "  make ingesta-install"
@@ -18,8 +23,9 @@ help:
 	@echo "  make ingesta-docker-build"
 	@echo "  make ingesta-docker-run"
 	@echo ""
-	@echo "modules/nttbanca-n has no Makefile of its own yet; use its own README/docker-compose directly, e.g.:"
-	@echo "  cd modules/nttbanca-n && pip install -r requirements.txt"
+	@echo "nttbanca-n module shortcuts (see modules/nttbanca-n/Makefile for the full list):"
+	@echo "  make -C modules/nttbanca-n install"
+	@echo "  make -C modules/nttbanca-n test"
 
 modules:
 	@for m in $(MODULES); do echo modules/$$m; done
@@ -39,6 +45,15 @@ test:
 			$(MAKE) -C modules/$$m test; \
 		fi; \
 	done
+
+migrate:
+	$(MAKE) -C modules/nttbanca-n migrate
+
+migrate-status:
+	$(MAKE) -C modules/nttbanca-n migrate-status
+
+migrate-dry-run:
+	$(MAKE) -C modules/nttbanca-n migrate-dry-run
 
 ingesta-install:
 	$(MAKE) -C modules/ingesta install
