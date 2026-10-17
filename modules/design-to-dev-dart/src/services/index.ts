@@ -12,6 +12,7 @@ import {
   insufficientAnswer,
 } from "@/lib/demo/fixtures";
 import { getDocumentFn, listDocumentsFn } from "@/server/functions/documents";
+import { askQuestionFn } from "@/server/functions/consultas";
 
 export interface ProcessingStatus {
   documentCode: string;
@@ -99,10 +100,10 @@ const backendProvider: HorizonteServices = {
   async getDocument(code) {
     return getDocumentFn({ data: code });
   },
-  async askQuestion() {
-    throw new NotImplementedError(
-      "El asistente de consultas normativas aún no está conectado al backend.",
-    );
+  async askQuestion(question, onStage) {
+    onStage?.("consulta");
+    onStage?.("recuperacion");
+    return askQuestionFn({ data: question });
   },
   async runValidations() {
     const docs = await backendProvider.listDocuments();

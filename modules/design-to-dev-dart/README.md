@@ -42,3 +42,21 @@ Start server functions (`src/server/functions/documents.ts`), so
 app's `NormativeDocument` shape — see that file's header comment for the
 simplifications involved (one ingesta `doc_id` becomes one document with a
 single synthetic version, not a full version history).
+
+## Connecting the Consultor view to modules/nttdatabanca
+
+The same `VITE_SERVICES_MODE=backend` switch also routes `/` (the "Consultor
+normativo" page) to `modules/nttdatabanca`'s RAG API instead of the demo
+answer fixtures:
+
+1. Start nttdatabanca's API: `docker compose up nttdatabanca` from the repo
+   root (it needs Voyage/Gemini API keys configured in its own `.env` to
+   actually answer), reachable at `http://localhost:8002` by default.
+2. Set `NTTDATABANCA_API_URL` in `.env.local` if it isn't on the default port.
+3. Run `npm run dev` as usual.
+
+`src/server/functions/consultas.ts` calls nttdatabanca's `POST /ask` and
+`src/server/nttdatabanca-adapter.ts` maps its response onto this app's
+`ConsultAnswer` shape — see that file's header comment for what's
+synthesized (there's no backend equivalent of `title`/`interpretation`,
+so those are derived from the response's shape rather than invented).
