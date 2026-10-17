@@ -4,7 +4,7 @@ import type {
 } from "@/lib/domain/ingesta-types";
 
 /**
- * Server-only. Import this from server-function handlers (src/server/functions/*)
+ * Server-only. Import this from server-function handlers (src/server-fns/*)
  * only, never from client components -- the base URL is read via process.env,
  * not import.meta.env, specifically so it is never bundled for the browser.
  * Defaults to the port modules/ingesta's docker-compose service publishes.

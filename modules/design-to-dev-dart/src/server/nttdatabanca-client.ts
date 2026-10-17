@@ -1,7 +1,7 @@
 import type { NttdatabancaRespuestaDTO } from "@/lib/domain/nttdatabanca-types";
 
 /**
- * Server-only. Import from server-function handlers (src/server/functions/*)
+ * Server-only. Import from server-function handlers (src/server-fns/*)
  * only, never from client components -- mirrors src/server/ingesta-client.ts's
  * convention: the base URL is read via process.env, never import.meta.env, so
  * it is never bundled for the browser. Matches the port modules/nttdatabanca's

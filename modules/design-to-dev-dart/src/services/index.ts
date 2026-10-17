@@ -11,8 +11,8 @@ import {
   demoDocuments,
   insufficientAnswer,
 } from "@/lib/demo/fixtures";
-import { getDocumentFn, listDocumentsFn } from "@/server/functions/documents";
-import { askQuestionFn } from "@/server/functions/consultas";
+import { getDocumentFn, listDocumentsFn } from "@/server-fns/documents";
+import { askQuestionFn } from "@/server-fns/consultas";
 
 export interface ProcessingStatus {
   documentCode: string;
