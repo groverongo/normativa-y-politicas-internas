@@ -12,17 +12,18 @@
 # Local Postgres: both modules' .env files point DB_HOST at a remote AWS RDS
 # instance by default. The `environment:` overrides below replace those with
 # the local `db` service instead, so nothing here touches the real RDS.
-# ingesta and nttbanca-n now share ONE database and ONE migration sequence
-# (modules/nttbanca-n/migrations/, see its README) -- the `migrate` service
-# below applies it once before either app starts.
+# ingesta, nttbanca-n and nttdatabanca now share ONE database and ONE
+# migration sequence (modules/nttbanca-n/migrations/, see its README) -- the
+# `migrate` service below applies it once before any app starts.
 #
-# nttdatabanca is fully independent: it talks to Qdrant Cloud (not the local
-# `db` Postgres) for vector search, so it loads its own .env and has no
-# depends_on here.
+# nttdatabanca also uses this same Postgres for vector search (pgvector,
+# replacing its former Qdrant Cloud dependency -- see
+# modules/nttbanca-n/migrations/0009_nttdatabanca_rag_support.sql), which is
+# why the `db` image below is pgvector-enabled rather than plain postgres.
 
 services:
   db:
-    image: postgres:18-alpine
+    image: pgvector/pgvector:pg18
     environment:
       POSTGRES_DB: nttbanca
       POSTGRES_USER: nttbanca
@@ -102,11 +103,22 @@ services:
     image: nttdatabanca-api
     env_file:
       - ./modules/nttdatabanca/.env
+    environment:
+      REGISTRY_BACKEND: postgres
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: nttbanca
+      DB_USER: nttbanca
+      DB_PASSWORD: nttbanca
+      DB_SSLMODE: disable
     ports:
       - "${NTTDATABANCA_PORT:-8002}:8080"
     volumes:
       - ./modules/nttdatabanca/registry.json:/app/registry.json
       - ./modules/nttdatabanca/evals.json:/app/evals.json:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

@@ -38,9 +38,6 @@ func status429o5xx(s int) bool { return s == 429 || s >= 500 }
 var (
 	// Voyage / Jina: embeddings y rerank son idempotentes y baratos de repetir.
 	politicaProveedor = &Politica{Nombre: "proveedor", Intentos: 5, Base: time.Second, Reintenta: status429o5xx, ErrRed: true}
-	// Qdrant: query es de lectura, el upsert usa IDs determinísticos (idPunto) y
-	// "ya existe" al crear la colección se trata como éxito en Qdrant.crear.
-	politicaQdrant = &Politica{Nombre: "qdrant", Intentos: 5, Base: time.Second, Reintenta: status429o5xx, ErrRed: true}
 	// LLM: cada request cuesta plata. Máximo 1 reintento, solo ante 429/503, y
 	// nunca ante timeout/error de red (la request pudo haberse procesado y cobrado).
 	politicaLLM = &Politica{Nombre: "llm", Intentos: 2, Base: time.Second,

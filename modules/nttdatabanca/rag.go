@@ -16,7 +16,7 @@ type RAG struct {
 	reg *Registry
 	emb Embedder
 	rr  Reranker // nil si no se va a rerankear (eval -norerank)
-	qd  *Qdrant
+	vs  VectorStore
 	llm *LLM
 
 	// jina: atajo de compatibilidad (tests previos al refactor). Si emb/rr son
@@ -50,12 +50,12 @@ func (r *RAG) verificarDim(ctx context.Context, n int) error {
 	if r.dimOK == n {
 		return nil
 	}
-	dim, existe, err := r.qd.Info(ctx)
+	dim, existe, err := r.vs.Info(ctx)
 	if err != nil || !existe {
 		return err
 	}
 	if dim != n {
-		return errDim(r.qd.coll, dim, n)
+		return errDim("chunk_vectors", dim, n)
 	}
 	r.dimOK = n
 	return nil
@@ -98,8 +98,9 @@ func (r *RAG) aResultado(h Hit) Resultado {
 	return res
 }
 
-// Search: 1 embedding + 1 query híbrida (Qdrant) + 1 rerank (proveedor configurado).
-// Los derogados NO se filtran: se devuelven marcados y se trae su reemplazo.
+// Search: 1 embedding + 1 query híbrida (Postgres: pgvector + tsvector) + 1
+// rerank (proveedor configurado). Los derogados NO se filtran: se devuelven
+// marcados y se trae su reemplazo.
 func (r *RAG) Search(ctx context.Context, q string, k int, rerank bool) (*ResultadoBusqueda, error) {
 	vec, err := r.embedder().EmbedQuery(ctx, q)
 	if err != nil {
@@ -108,7 +109,7 @@ func (r *RAG) Search(ctx context.Context, q string, k int, rerank bool) (*Result
 	if err := r.verificarDim(ctx, len(vec)); err != nil {
 		return nil, err
 	}
-	hits, err := r.qd.Hibrida(ctx, vec, bm25Query(tokenizar(q)), r.reg.DocIDsDesdeTexto(q), candidatos)
+	hits, err := r.vs.Hibrida(ctx, vec, q, r.reg.DocIDsDesdeTexto(q), candidatos)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +159,7 @@ func (r *RAG) Search(ctx context.Context, q string, k int, rerank bool) (*Result
 		}
 	}
 	if len(faltan) > 0 {
-		if extra, err := r.qd.DenseEnDocs(ctx, vec, faltan, 2*len(faltan)); err == nil {
+		if extra, err := r.vs.DenseEnDocs(ctx, vec, faltan, 2*len(faltan)); err == nil {
 			for _, h := range extra {
 				res := r.aResultado(h)
 				res.Reemplazo = true

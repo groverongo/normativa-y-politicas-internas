@@ -3,8 +3,9 @@
 # ---------- build: binario estático, sin CGO ----------
 FROM golang:1.25-alpine AS build
 WORKDIR /src
-# go.mod primero para aprovechar la caché de capas (no hay go.sum: solo stdlib).
-COPY go.mod ./
+# go.mod/go.sum primero para aprovechar la caché de capas (pgx + aws-sdk-go-v2:
+# ya no es solo stdlib, ver db.go/s3store.go/pgvectorstore.go).
+COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/go/pkg/mod go mod download
 COPY *.go ./
 RUN --mount=type=cache,target=/root/go/pkg/mod \

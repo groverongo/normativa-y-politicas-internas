@@ -1,7 +1,9 @@
 // normativa-rag: RAG sobre normativa SBS + políticas internas.
-// Solo librería estándar de Go. Dependencias externas: Qdrant Cloud, Voyage AI
-// (o Jina), un LLM con API compatible con OpenAI (Gemini por defecto), y
-// `pdftotext` (poppler-utils) para la ingesta.
+// Dependencias externas: Postgres (pgvector, vía github.com/jackc/pgx/v5 --
+// mismo rol que modules/ingesta's S3DbStorage) + S3 (vía aws-sdk-go-v2 --
+// mismo rol que modules/ingesta/modules/nttbanca-n), Voyage AI (o Jina) para
+// embeddings/rerank, un LLM con API compatible con OpenAI (Gemini por
+// defecto), y `pdftotext` (poppler-utils) para la ingesta.
 package main
 
 import (
@@ -15,17 +17,29 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Config struct {
 	EmbProvider, RerankProvider                    string // jina | voyage
-	QdrantURL, QdrantKey, Coleccion                string
 	VoyageKey, VoyageEmbedModel, VoyageRerankModel string
 	JinaKey, EmbedModel, RerankModel               string
 	Dim                                            int // solo Jina (parámetro "dimensions")
 	LLMBase, LLMKey, LLMModel, LLMEffort           string
 	PriceIn, PriceOut                              float64 // USD por millón de tokens
 	RegistryPath, Addr, CORSOrigin                 string
+	RegistryBackend                                string // file (registry.json) | postgres (documents/document_lineage)
+
+	// Postgres: mismas variables de entorno que modules/ingesta/config.py's
+	// Settings (DB_PASSWORD se lee aparte, directo del entorno, en db.go).
+	DBHost, DBPort, DBName, DBUser, DBSSLMode string
+	DBConnectTimeout                          int
+
+	// S3: mismas variables que modules/ingesta (raw text) y
+	// modules/nttbanca-n/app/services/s3.py (S3Service).
+	AWSRegion, S3BucketName, S3EndpointURL, S3KeyPrefix string
+	S3PresignedURLExpiration                            int
 }
 
 func env(k, def string) string {
@@ -47,15 +61,24 @@ func envFloat(k string, def float64) (float64, error) {
 	return f, nil
 }
 
+func envInt(k string, def int) (int, error) {
+	s := env(k, "")
+	if s == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q no es un entero válido", k, s)
+	}
+	return n, nil
+}
+
 func cargarConfig() (Config, error) {
 	dim, _ := strconv.Atoi(env("EMBED_DIM", "1024"))
 	emb := strings.ToLower(env("EMB_PROVIDER", "voyage"))
 	cfg := Config{
 		EmbProvider:       emb,
 		RerankProvider:    strings.ToLower(env("RERANK_PROVIDER", "voyage")),
-		QdrantURL:         env("QDRANT_URL", ""), // ej: https://xxxx.us-east4-0.gcp.cloud.qdrant.io:6333
-		QdrantKey:         env("QDRANT_API_KEY", ""),
-		Coleccion:         env("QDRANT_COLLECTION", "normativa_"+emb),
 		VoyageKey:         env("VOYAGE_API_KEY", ""),
 		VoyageEmbedModel:  env("VOYAGE_EMBED_MODEL", "voyage-4"),
 		VoyageRerankModel: env("VOYAGE_RERANK_MODEL", "rerank-2.5"),
@@ -70,12 +93,30 @@ func cargarConfig() (Config, error) {
 		RegistryPath:      env("REGISTRY_PATH", "registry.json"),
 		Addr:              env("ADDR", ":8080"),
 		CORSOrigin:        env("CORS_ORIGIN", "*"),
+		RegistryBackend:   strings.ToLower(env("REGISTRY_BACKEND", "file")),
+
+		DBHost:    env("DB_HOST", ""),
+		DBPort:    env("DB_PORT", "5432"),
+		DBName:    env("DB_NAME", ""),
+		DBUser:    env("DB_USER", ""),
+		DBSSLMode: env("DB_SSLMODE", ""),
+
+		AWSRegion:     env("AWS_REGION", ""),
+		S3BucketName:  env("S3_BUCKET_NAME", ""),
+		S3EndpointURL: env("S3_ENDPOINT_URL", ""),
+		S3KeyPrefix:   env("S3_KEY_PREFIX", ""),
 	}
 	var err error
 	if cfg.PriceIn, err = envFloat("LLM_PRICE_IN", 0.75); err != nil {
 		return cfg, err
 	}
 	if cfg.PriceOut, err = envFloat("LLM_PRICE_OUT", 3.75); err != nil {
+		return cfg, err
+	}
+	if cfg.DBConnectTimeout, err = envInt("DB_CONNECT_TIMEOUT", 10); err != nil {
+		return cfg, err
+	}
+	if cfg.S3PresignedURLExpiration, err = envInt("S3_PRESIGNED_URL_EXPIRATION", 3600); err != nil {
 		return cfg, err
 	}
 	return cfg, nil
@@ -109,13 +150,6 @@ func faltantes(pares ...string) error {
 	return nil
 }
 
-func nuevoQdrant(cfg Config) (*Qdrant, error) {
-	if err := faltantes("QDRANT_URL", cfg.QdrantURL); err != nil {
-		return nil, err
-	}
-	return &Qdrant{base: cfg.QdrantURL, key: cfg.QdrantKey, coll: cfg.Coleccion}, nil
-}
-
 func nuevoLLM(cfg Config) (*LLM, error) {
 	if err := faltantes("LLM_API_KEY", cfg.LLMKey, "LLM_MODEL", cfg.LLMModel); err != nil {
 		return nil, err
@@ -127,18 +161,28 @@ func nuevoLLM(cfg Config) (*LLM, error) {
 		priceIn: cfg.PriceIn, priceOut: cfg.PriceOut}, nil
 }
 
+// cargarRegistro elige la fuente del registro de vigencia según
+// REGISTRY_BACKEND: "file" (default) sigue leyendo registry.json como
+// siempre, sin requerir ningún servicio externo (lo que mantiene `ingest
+// -dry` utilizable sin credenciales); "postgres" lo reconstruye desde la
+// tabla compartida `documents` -- ver LoadRegistryFromDB.
+func cargarRegistro(ctx context.Context, cfg Config, pool *pgxpool.Pool) (*Registry, error) {
+	if cfg.RegistryBackend == "postgres" {
+		return LoadRegistryFromDB(ctx, pool)
+	}
+	return LoadRegistry(cfg.RegistryPath)
+}
+
 // nuevoRAG valida solo lo que se va a usar: eval -norerank no pide el reranker
-// y eval no pide el LLM.
-func nuevoRAG(cfg Config, reg *Registry, conLLM, conRerank bool) (*RAG, error) {
+// y eval no pide el LLM. El vector store ya no es opcional/Qdrant: siempre es
+// Postgres (pgvector), de ahí que reciba el pool ya abierto en vez de
+// construir su propio cliente.
+func nuevoRAG(cfg Config, reg *Registry, pool *pgxpool.Pool, conLLM, conRerank bool) (*RAG, error) {
 	emb, err := nuevoEmbedder(cfg)
 	if err != nil {
 		return nil, err
 	}
-	q, err := nuevoQdrant(cfg)
-	if err != nil {
-		return nil, err
-	}
-	r := &RAG{reg: reg, emb: emb, qd: q}
+	r := &RAG{reg: reg, emb: emb, vs: nuevoPgVectorStore(pool)}
 	if conRerank {
 		if r.rr, err = nuevoReranker(cfg); err != nil {
 			return nil, err
@@ -196,32 +240,70 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	reg, err := LoadRegistry(cfg.RegistryPath)
-	if err != nil {
-		log.Fatalf("registro de vigencia: %v", err)
-	}
 	ctx := context.Background()
 
 	switch cmd {
 	case "ingest":
 		fs := flag.NewFlagSet("ingest", flag.ExitOnError)
 		dry := fs.Bool("dry", false, "solo parsea y escribe chunks.jsonl (no gasta créditos)")
-		reset := fs.Bool("reset", true, "borra y recrea la colección antes de indexar")
+		reset := fs.Bool("reset", true, "borra y recrea los embeddings antes de indexar")
 		fs.Parse(args)
-		err = runIngest(ctx, cfg, reg, *reset, *dry)
+
+		if *dry {
+			// -dry nunca toca servicios externos: ni Postgres ni S3, solo
+			// corpus/ + registry.json local, igual que antes.
+			reg, errReg := LoadRegistry(cfg.RegistryPath)
+			if errReg != nil {
+				log.Fatalf("registro de vigencia: %v", errReg)
+			}
+			err = runIngest(ctx, cfg, reg, nil, nil, *reset, true)
+			break
+		}
+		pool, errDB := nuevoDB(ctx, cfg)
+		if errDB != nil {
+			log.Fatal(errDB)
+		}
+		defer pool.Close()
+		s3, errS3 := nuevoS3(ctx, cfg)
+		if errS3 != nil {
+			log.Fatal(errS3)
+		}
+		reg, errReg := cargarRegistro(ctx, cfg, pool)
+		if errReg != nil {
+			log.Fatalf("registro de vigencia: %v", errReg)
+		}
+		err = runIngest(ctx, cfg, reg, pool, s3, *reset, false)
 	case "eval":
 		fs := flag.NewFlagSet("eval", flag.ExitOnError)
 		file := fs.String("f", "evals.json", "archivo de preguntas golden")
 		k := fs.Int("k", 5, "top-k a evaluar")
 		norerank := fs.Bool("norerank", false, "evaluar sin reranker (para comparar)")
 		fs.Parse(args)
+		pool, errDB := nuevoDB(ctx, cfg)
+		if errDB != nil {
+			log.Fatal(errDB)
+		}
+		defer pool.Close()
+		reg, errReg := cargarRegistro(ctx, cfg, pool)
+		if errReg != nil {
+			log.Fatalf("registro de vigencia: %v", errReg)
+		}
 		var rag *RAG
-		if rag, err = nuevoRAG(cfg, reg, false, !*norerank); err == nil {
+		if rag, err = nuevoRAG(cfg, reg, pool, false, !*norerank); err == nil {
 			err = runEval(ctx, rag, *file, *k, !*norerank)
 		}
 	case "serve":
+		pool, errDB := nuevoDB(ctx, cfg)
+		if errDB != nil {
+			log.Fatal(errDB)
+		}
+		defer pool.Close()
+		reg, errReg := cargarRegistro(ctx, cfg, pool)
+		if errReg != nil {
+			log.Fatalf("registro de vigencia: %v", errReg)
+		}
 		var rag *RAG
-		if rag, err = nuevoRAG(cfg, reg, true, true); err == nil {
+		if rag, err = nuevoRAG(cfg, reg, pool, true, true); err == nil {
 			err = runServe(cfg, rag)
 		}
 	default:

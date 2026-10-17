@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Doc es una fila del registro de vigencia. Es la ÚNICA fuente de verdad sobre
@@ -46,6 +50,13 @@ func LoadRegistry(path string) (*Registry, error) {
 	if err := json.Unmarshal(data, &docs); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	return buildRegistry(docs)
+}
+
+// buildRegistry indexa y valida una lista de documentos, sin importar de
+// dónde vinieron (registry.json vía LoadRegistry, o Postgres vía
+// LoadRegistryFromDB).
+func buildRegistry(docs []*Doc) (*Registry, error) {
 	r := &Registry{docs: map[string]*Doc{}, byNumero: map[string]string{}}
 	for _, d := range docs {
 		if d.ID == "" {
@@ -77,6 +88,77 @@ func LoadRegistry(path string) (*Registry, error) {
 		}
 	}
 	return r, nil
+}
+
+// LoadRegistryFromDB reconstruye el mismo *Registry* que LoadRegistry, pero
+// leyendo la tabla compartida `documents` (migración
+// 0009_nttdatabanca_rag_support.sql) en vez de registry.json: external_code/
+// external_url son numero/url, y derogado_por/modificado_por salen de
+// document_lineage (relation revoked_by|superseded_by para "derogado por",
+// patched_by para "modificado por") en vez de columnas propias, ya que el
+// esquema compartido con modules/ingesta y modules/nttbanca-n no las tiene.
+func LoadRegistryFromDB(ctx context.Context, pool *pgxpool.Pool) (*Registry, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT doc_id, doc_type, title, external_code, external_url, valid_from
+		FROM documents`)
+	if err != nil {
+		return nil, fmt.Errorf("documents: %w", err)
+	}
+	porID := map[string]*Doc{}
+	var orden []*Doc
+	for rows.Next() {
+		var d Doc
+		var codigo, url *string
+		var fecha *time.Time
+		if err := rows.Scan(&d.ID, &d.Tipo, &d.Titulo, &codigo, &url, &fecha); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("documents: %w", err)
+		}
+		if codigo != nil {
+			d.Numero = *codigo
+		}
+		if url != nil {
+			d.URL = *url
+		}
+		if fecha != nil {
+			f := fecha.Format("2006-01-02")
+			d.Fecha, d.VigenteDesde = f, f
+		}
+		porID[d.ID] = &d
+		orden = append(orden, &d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("documents: %w", err)
+	}
+
+	lrows, err := pool.Query(ctx, `SELECT doc_id, relation, target_doc_id FROM document_lineage`)
+	if err != nil {
+		return nil, fmt.Errorf("document_lineage: %w", err)
+	}
+	defer lrows.Close()
+	for lrows.Next() {
+		var docID, relation, target string
+		if err := lrows.Scan(&docID, &relation, &target); err != nil {
+			return nil, fmt.Errorf("document_lineage: %w", err)
+		}
+		d, ok := porID[docID]
+		if !ok {
+			continue
+		}
+		switch relation {
+		case "revoked_by", "superseded_by":
+			if d.DerogadoPor == "" {
+				d.DerogadoPor = target
+			}
+		case "patched_by":
+			d.ModificadoPor = append(d.ModificadoPor, target)
+		}
+	}
+	if err := lrows.Err(); err != nil {
+		return nil, fmt.Errorf("document_lineage: %w", err)
+	}
+
+	return buildRegistry(orden)
 }
 
 func (r *Registry) Get(id string) (*Doc, bool) { d, ok := r.docs[id]; return d, ok }

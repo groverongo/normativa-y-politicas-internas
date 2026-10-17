@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"log"
 	"os"
 	"os/exec"
@@ -15,6 +14,9 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Chunk struct {
@@ -178,15 +180,16 @@ func conEncabezado(reg *Registry, c Chunk) string {
 	return cab + " — " + c.Ruta + "\n" + c.Texto
 }
 
-func idPunto(chunkID string) uint64 {
-	h := fnv.New64a()
-	h.Write([]byte(chunkID))
-	return h.Sum64()
+type docIngestado struct {
+	doc    *Doc
+	pages  []string
+	chunks []Chunk
 }
 
-func runIngest(ctx context.Context, cfg Config, reg *Registry, reset, dry bool) error {
+func runIngest(ctx context.Context, cfg Config, reg *Registry, pool *pgxpool.Pool, s3 *S3Store, reset, dry bool) error {
 	base := filepath.Dir(cfg.RegistryPath)
 	var chunks []Chunk
+	var docs []docIngestado
 	for _, d := range reg.Docs() {
 		if d.Archivo == "" {
 			log.Printf("· %s: sin archivo, se saltea", d.ID)
@@ -207,6 +210,7 @@ func runIngest(ctx context.Context, cfg Config, reg *Registry, reset, dry bool) 
 		cs := chunkear(d.ID, pages)
 		log.Printf("· %-28s %3d págs → %3d chunks", d.ID, len(pages), len(cs))
 		chunks = append(chunks, cs...)
+		docs = append(docs, docIngestado{doc: d, pages: pages, chunks: cs})
 	}
 	if err := escribirJSONL("chunks.jsonl", chunks); err != nil {
 		return err
@@ -220,19 +224,19 @@ func runIngest(ctx context.Context, cfg Config, reg *Registry, reset, dry bool) 
 	if err != nil {
 		return err
 	}
-	qd, err := nuevoQdrant(cfg)
-	if err != nil {
-		return err
+	vs := nuevoPgVectorStore(pool)
+
+	for _, di := range docs {
+		if err := persistirDocumento(ctx, pool, s3, di); err != nil {
+			return fmt.Errorf("persistir %s en Postgres/S3: %w", di.doc.ID, err)
+		}
 	}
+	log.Printf("documentos, chunks y lineage escritos en Postgres; texto crudo subido a S3 ✓")
+
 	textos := make([]string, len(chunks))
-	toks := make([][]string, len(chunks))
-	total := 0
 	for i, c := range chunks {
 		textos[i] = conEncabezado(reg, c)
-		toks[i] = tokenizar(textos[i])
-		total += len(toks[i])
 	}
-	avgdl := float64(total) / float64(len(chunks))
 
 	vecs, err := emb.EmbedDocs(ctx, textos)
 	if err != nil {
@@ -241,22 +245,93 @@ func runIngest(ctx context.Context, cfg Config, reg *Registry, reset, dry bool) 
 	if len(vecs) != len(chunks) || len(vecs[0]) == 0 {
 		return fmt.Errorf("el embedder devolvió %d vectores para %d chunks", len(vecs), len(chunks))
 	}
-	if err := qd.Asegurar(ctx, len(vecs[0]), reset); err != nil {
-		return fmt.Errorf("preparar colección: %w", err)
+	if err := vs.Asegurar(ctx, len(vecs[0]), reset); err != nil {
+		return fmt.Errorf("preparar chunk_vectors: %w", err)
 	}
-	pts := make([]Punto, len(chunks))
+	items := make([]VectorItem, len(chunks))
 	for i, c := range chunks {
-		pts[i] = Punto{
-			ID:      idPunto(c.ChunkID),
-			Vector:  map[string]any{"dense": vecs[i], "bm25": bm25Doc(toks[i], avgdl)},
-			Payload: c,
-		}
+		items[i] = VectorItem{Chunk: c, Vector: vecs[i], Model: cfg.EmbedModel}
 	}
-	if err := qd.Upsert(ctx, pts); err != nil {
+	if err := vs.Upsert(ctx, items); err != nil {
 		return err
 	}
-	log.Printf("indexados %d chunks en %q ✓", len(pts), cfg.Coleccion)
+	log.Printf("indexados %d chunks en chunk_vectors (Postgres/pgvector) ✓", len(items))
 	return nil
+}
+
+// persistirDocumento sube el texto crudo del documento a S3 (documents.source_uri)
+// y escribe sus filas en documents/chunks/document_lineage -- el mismo
+// trabajo que modules/ingesta/storage.py's S3DbStorage.put_document hace para
+// su propio corpus, aplicado al de nttdatabanca.
+func persistirDocumento(ctx context.Context, pool *pgxpool.Pool, s3 *S3Store, di docIngestado) error {
+	d := di.doc
+	rawText := strings.Join(di.pages, "\n\f\n")
+	sourceURI, err := s3.PutRawText(ctx, d.ID, rawText)
+	if err != nil {
+		return err
+	}
+
+	status := "ACTIVE"
+	if d.DerogadoPor != "" {
+		status = "REVOKED"
+	}
+	var validFrom *string
+	if d.VigenteDesde != "" {
+		validFrom = &d.VigenteDesde
+	} else if d.Fecha != "" {
+		validFrom = &d.Fecha
+	}
+	var numero, url *string
+	if d.Numero != "" {
+		numero = &d.Numero
+	}
+	if d.URL != "" {
+		url = &d.URL
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO documents (doc_id, doc_type, title, issuer, source_uri, status, valid_from, external_code, external_url)
+		VALUES ($1, $2, $3, '', $4, $5, $6::date, $7, $8)
+		ON CONFLICT (doc_id) DO UPDATE SET
+			doc_type = EXCLUDED.doc_type, title = EXCLUDED.title, source_uri = EXCLUDED.source_uri,
+			status = EXCLUDED.status, valid_from = EXCLUDED.valid_from,
+			external_code = EXCLUDED.external_code, external_url = EXCLUDED.external_url`,
+		d.ID, d.Tipo, d.Titulo, sourceURI, status, validFrom, numero, url)
+	if err != nil {
+		return fmt.Errorf("documents: %w", err)
+	}
+
+	batch := &pgx.Batch{}
+	for idx, c := range di.chunks {
+		batch.Queue(`
+			INSERT INTO chunks (chunk_id, doc_id, chunk_index, text, section_label, page_number)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (chunk_id) DO UPDATE SET
+				text = EXCLUDED.text, section_label = EXCLUDED.section_label,
+				page_number = EXCLUDED.page_number, chunk_index = EXCLUDED.chunk_index`,
+			c.ChunkID, c.DocID, idx, c.Texto, c.Ruta, c.Pagina)
+	}
+	batch.Queue(`DELETE FROM document_lineage WHERE doc_id = $1 AND relation IN ('revoked_by', 'patched_by')`, d.ID)
+	if d.DerogadoPor != "" {
+		batch.Queue(`INSERT INTO document_lineage (doc_id, relation, target_doc_id) VALUES ($1, 'revoked_by', $2)
+			ON CONFLICT (doc_id, relation, target_doc_id) DO NOTHING`, d.ID, d.DerogadoPor)
+	}
+	for _, m := range d.ModificadoPor {
+		batch.Queue(`INSERT INTO document_lineage (doc_id, relation, target_doc_id) VALUES ($1, 'patched_by', $2)
+			ON CONFLICT (doc_id, relation, target_doc_id) DO NOTHING`, d.ID, m)
+	}
+	br := pool.SendBatch(ctx, batch)
+	n := len(di.chunks) + 1 + len(d.ModificadoPor)
+	if d.DerogadoPor != "" {
+		n++
+	}
+	for i := 0; i < n; i++ {
+		if _, err := br.Exec(); err != nil {
+			br.Close()
+			return fmt.Errorf("chunks/document_lineage: %w", err)
+		}
+	}
+	return br.Close()
 }
 
 func escribirJSONL(path string, chunks []Chunk) error {

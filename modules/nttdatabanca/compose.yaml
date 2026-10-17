@@ -1,7 +1,7 @@
 # Uso:
 #   docker compose up -d --build                     # API en :8080
 #   docker compose run --rm ingest -dry              # chunking sin gastar créditos → ./out/chunks.jsonl
-#   docker compose run --rm ingest                   # indexar en Qdrant
+#   docker compose run --rm ingest                   # subir a S3 + indexar en Postgres/pgvector
 #   docker compose run --rm api eval [-norerank]     # medir retrieval
 
 x-hardening: &hardening

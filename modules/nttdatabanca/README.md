@@ -1,17 +1,21 @@
 # normativa-rag
 
 RAG sobre normativa SBS + políticas internas, con citas verificadas y alertas de vigencia.
-Go 1.22+, solo librería estándar. Servicios externos: Qdrant Cloud, Voyage AI (o Jina) para embeddings y rerank, y un LLM con API compatible con OpenAI (Gemini por defecto).
+Go 1.22+. Servicios externos: Postgres con `pgvector` (búsqueda híbrida: distancia coseno +
+texto completo, ver la migración `../nttbanca-n/migrations/0009_nttdatabanca_rag_support.sql`) y S3
+(texto crudo) -- misma convención de conexión que `modules/ingesta` y `modules/nttbanca-n` --, Voyage AI
+(o Jina) para embeddings y rerank, y un LLM con API compatible con OpenAI (Gemini por defecto).
 
 ## Qué hace
-- Ingesta PDFs/Markdown de `corpus/`, los parte por artículo y los indexa en Qdrant.
+- Ingesta PDFs/Markdown de `corpus/`, los parte por artículo, sube el texto crudo a S3 y los indexa en Postgres (`chunk_vectors` + `chunks.tsv`).
 - Responde preguntas con citas textuales **validadas** contra los chunks recuperados (las inventadas se descartan).
 - Avisa cuando una fuente está **derogada** o modificada, y detecta **contradicciones** entre documentos resolviéndolas por jerarquía.
 
 ## Requisitos
 - Go 1.22+
 - `pdftotext` (poppler): `brew install poppler` o `sudo apt install poppler-utils`
-- Cuenta/keys de: Qdrant Cloud, Voyage AI (o Jina) y un proveedor LLM (por defecto Gemini)
+- Postgres con la extensión `vector` (ver `docker-compose.yml` en la raíz del repo: `pgvector/pgvector:pg18`) y un bucket S3
+- Cuenta/keys de: Voyage AI (o Jina) y un proveedor LLM (por defecto Gemini)
 
 ## Configuración
 ```bash
@@ -22,15 +26,18 @@ set -a; source .env; set +a
 
 | Variable | Para qué |
 |---|---|
-| `QDRANT_URL`, `QDRANT_API_KEY` | Cluster de Qdrant Cloud (incluir el puerto `:6333`) |
+| `REGISTRY_BACKEND` | `file` (default: registry.json/corpus/, sin servicios externos) \| `postgres` (tabla compartida `documents`) |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_SSLMODE`, `DB_CONNECT_TIMEOUT` | Conexión a Postgres (requerida por `ingest` sin `-dry`, `eval` y `serve`) |
+| `AWS_REGION`, `S3_BUCKET_NAME`, `S3_ENDPOINT_URL`, `S3_KEY_PREFIX` | Conexión a S3 (texto crudo de cada documento); credenciales por la cadena por defecto de AWS si no están seteadas |
 | `EMB_PROVIDER`, `RERANK_PROVIDER` | `voyage` (default) o `jina` |
 | `VOYAGE_API_KEY` / `JINA_API_KEY` | Key del proveedor elegido |
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Cualquier API compatible con OpenAI |
 | `LLM_REASONING_EFFORT` | `low` \| `medium` \| `high` (Gemini 3.x no admite `none`) |
 | `LLM_PRICE_IN`, `LLM_PRICE_OUT` | USD por millón de tokens, solo para el log de costo |
-| `REGISTRY_PATH`, `ADDR`, `CORS_ORIGIN` | Registro de vigencia, puerto (`:8080`) y CORS |
+| `REGISTRY_PATH`, `ADDR`, `CORS_ORIGIN` | Registro de vigencia (modo `file`), puerto (`:8080`) y CORS |
 
-Cada comando valida solo lo que usa: `eval` no pide el LLM y `eval -norerank` no pide el reranker.
+Cada comando valida solo lo que usa: `ingest -dry` no pide ni Postgres ni S3 (solo chunking local),
+`eval` no pide el LLM y `eval -norerank` no pide el reranker.
 
 ## Cómo correrlo
 
@@ -41,7 +48,8 @@ go vet ./... && go test ./...
 # 1. Revisar el chunking SIN gastar créditos → escribe chunks.jsonl
 go run . ingest -dry
 
-# 2. Indexar (embeddings + Qdrant). Por defecto recrea la colección (-reset=true)
+# 2. Indexar (sube texto a S3, escribe documents/chunks en Postgres y embeddings en
+#    chunk_vectors). Por defecto recrea los embeddings (-reset=true)
 go run . ingest
 
 # 3. Medir calidad del retrieval (no usa el LLM)
@@ -60,7 +68,7 @@ Compose lee `.env` solo (no hace falta el `source`).
 
 ```bash
 docker compose run --rm ingest -dry      # chunking → ./out/chunks.jsonl
-docker compose run --rm ingest           # indexar en Qdrant
+docker compose run --rm ingest           # subir a S3 + indexar en Postgres/pgvector
 docker compose run --rm api eval         # medir retrieval
 docker compose up -d --build             # API en :8080 (HOST_PORT=18080 para cambiar el puerto)
 ```
@@ -104,7 +112,7 @@ Ejemplo completo en `ejemplo_respuesta.json`. Campos principales:
 
 ## Qué probar
 1. **Chunking** (`ingest -dry`): que cada artículo sea un chunk y el encabezado (título, número) quede embebido.
-2. **Idempotencia**: correr `ingest -reset=false` dos veces no debe duplicar puntos en Qdrant.
+2. **Idempotencia**: correr `ingest -reset=false` dos veces no debe duplicar filas en `chunk_vectors` (upsert por `chunk_id`).
 3. **Retrieval** (`eval`): el rerank debería igualar o mejorar a `-norerank`.
 4. **Contradicción deliberada**: preguntar frecuencia/plazo de pruebas → debe marcar política v2 vs. PROC-CN-07 y prevalecer la política.
 5. **Derogado**: una pregunta que solo cubre la v1 → alerta de vigencia, no se usa como norma vigente.
@@ -124,9 +132,9 @@ Jerarquía para resolver contradicciones: `norma_sbs` > `basilea` > `politica_in
 `evals.json` es una lista de `{"pregunta": "...", "esperado": ["chunk_id", ...]}`. Agregá casos propios para medir el retrieval cuando cambies chunking, modelo o proveedor.
 
 ## Proveedores y reintentos
-Cada proveedor usa su propia colección (`normativa_<proveedor>`) porque las dimensiones difieren; si la dimensión no coincide, falla con un mensaje claro. Para cambiar a Jina: `EMB_PROVIDER=jina`, `RERANK_PROVIDER=jina`, `JINA_API_KEY=...` y re-ingestar.
+Todos los proveedores comparten la misma tabla `chunk_vectors` (la dimensión queda registrada por fila); si cambiás de proveedor/modelo con una dimensión distinta, falla con un mensaje claro -- re-ingestá con `-reset=true` para recrearla. Para cambiar a Jina: `EMB_PROVIDER=jina`, `RERANK_PROVIDER=jina`, `JINA_API_KEY=...` y re-ingestar.
 
-Reintentos (`httpx.go`): Voyage/Jina y Qdrant, 5 intentos con backoff exponencial y `Retry-After` (el upsert es idempotente: IDs determinísticos; “ya existe” al crear la colección cuenta como éxito). LLM: máximo 1 reintento, solo ante 429/503 y nunca ante timeout. Todo respeta el `context` del request.
+Reintentos (`httpx.go`): Voyage/Jina, 5 intentos con backoff exponencial y `Retry-After` (el upsert a Postgres es idempotente: `chunk_id` es la clave primaria de `chunk_vectors`/`chunks`). LLM: máximo 1 reintento, solo ante 429/503 y nunca ante timeout. Todo respeta el `context` del request.
 
 ## Problemas comunes
 | Síntoma | Causa probable |
@@ -135,3 +143,5 @@ Reintentos (`httpx.go`): Voyage/Jina y Qdrant, 5 intentos con backoff exponencia
 | `pdftotext: not found` | `brew install poppler` |
 | Error de dimensión al indexar | Cambiaste de proveedor/modelo: `ingest` con `-reset=true` |
 | 404/“model not found” del LLM | Revisar `LLM_MODEL` y `LLM_BASE_URL` |
+| `no se pudo conectar a Postgres en ...` | `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` mal seteados, o la extensión `vector` no está instalada (`CREATE EXTENSION vector`, ver `pgvector/pgvector:pg18`) |
+| `documents`/`chunks`/`chunk_vectors` no existen | Correr `make migrate` desde la raíz del repo antes de usar `REGISTRY_BACKEND=postgres` |

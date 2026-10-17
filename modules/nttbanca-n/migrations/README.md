@@ -39,6 +39,7 @@ the target database before using `STORAGE_BACKEND=postgres`.
 | `0006_create_document_definition_sources.sql` | `document_definition_sources` | shared |
 | `0007_create_document_patches.sql` | `document_patches` | shared |
 | `0008_create_ingestion_log.sql` | `ingestion_log` | nttbanca-n's agent-interaction log |
+| `0009_nttdatabanca_rag_support.sql` | `documents`/`chunks` (ALTER), `chunk_vectors` | modules/nttdatabanca's registry + pgvector-backed search |
 
 The shared tables (`0003`-`0007`) mirror `modules/ingesta/schema.py` /
 `modules/nttbanca-n/app/schemas/lifecycle.py`'s pydantic models; see each

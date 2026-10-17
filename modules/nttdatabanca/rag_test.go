@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -112,9 +111,31 @@ func TestRegistroDelRepo(t *testing.T) {
 	}
 }
 
-// Pipeline completo de /ask contra fakes: valida el plumbing JSON con Jina,
-// Qdrant y el LLM, el reemplazo de derogados, la validación de citas y la
-// resolución de contradicciones.
+// fakeVectorStore implementa VectorStore en memoria, sin Postgres: el mismo
+// "seam" que modules/ingesta's InMemoryStorage usa para poder testear sin
+// una base real. Hibrida/DenseEnDocs devuelven listas fijas y registran lo
+// que recibieron, para poder asegurar que RAG.Search las usa correctamente.
+type fakeVectorStore struct {
+	hibridaHits []Hit
+	denseHits   []Hit
+	gotQuery    string
+	gotDenseLen int
+}
+
+func (f *fakeVectorStore) Info(context.Context) (int, bool, error)    { return 2, true, nil }
+func (f *fakeVectorStore) Asegurar(context.Context, int, bool) error  { return nil }
+func (f *fakeVectorStore) Upsert(context.Context, []VectorItem) error { return nil }
+func (f *fakeVectorStore) DenseEnDocs(context.Context, []float32, []string, int) ([]Hit, error) {
+	return f.denseHits, nil
+}
+func (f *fakeVectorStore) Hibrida(_ context.Context, dense []float32, queryText string, _ []string, _ int) ([]Hit, error) {
+	f.gotQuery, f.gotDenseLen = queryText, len(dense)
+	return f.hibridaHits, nil
+}
+
+// Pipeline completo de /ask contra fakes: valida el plumbing JSON con Jina y
+// el LLM, la búsqueda híbrida vía fakeVectorStore, el reemplazo de
+// derogados, la validación de citas y la resolución de contradicciones.
 func TestAskEndToEndConFakes(t *testing.T) {
 	reg, err := LoadRegistry("registry.json")
 	if err != nil {
@@ -139,11 +160,7 @@ func TestAskEndToEndConFakes(t *testing.T) {
 		},
 	})
 
-	var hibridaBody map[string]any
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var in map[string]any
-		json.Unmarshal(body, &in)
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.URL.Path == "/v1/embeddings":
@@ -155,17 +172,6 @@ func TestAskEndToEndConFakes(t *testing.T) {
 		case r.URL.Path == "/v1/rerank":
 			json.NewEncoder(w).Encode(map[string]any{"results": []any{
 				map[string]any{"index": 1, "relevance_score": 0.9}, map[string]any{"index": 0, "relevance_score": 0.7}}})
-		case r.URL.Path == "/collections/normativa/points/query":
-			if r.Header.Get("api-key") != "qk" {
-				w.WriteHeader(403)
-				return
-			}
-			pts := []Hit{{Score: 1, Payload: v2}} // DenseEnDocs → trae el reemplazo
-			if _, ok := in["prefetch"]; ok {
-				hibridaBody = in
-				pts = []Hit{{Score: 0.5, Payload: proc}, {Score: 0.4, Payload: v1}}
-			}
-			json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"points": pts}})
 		case r.URL.Path == "/chat/completions":
 			json.NewEncoder(w).Encode(map[string]any{"choices": []any{
 				map[string]any{"message": map[string]any{"content": "```json\n" + string(llmJSON) + "\n```"}}}})
@@ -176,15 +182,22 @@ func TestAskEndToEndConFakes(t *testing.T) {
 	defer fake.Close()
 	jinaBase = fake.URL + "/v1"
 
+	vs := &fakeVectorStore{
+		hibridaHits: []Hit{{Score: 0.5, Payload: proc}, {Score: 0.4, Payload: v1}},
+		denseHits:   []Hit{{Score: 1, Payload: v2}}, // DenseEnDocs → trae el reemplazo
+	}
 	rag := &RAG{reg: reg, jina: &Jina{key: "jk", embedModel: "m", rerankModel: "r", dim: 2},
-		qd: &Qdrant{base: fake.URL, key: "qk", coll: "normativa"}, llm: &LLM{base: fake.URL, key: "lk", model: "x"}}
+		vs: vs, llm: &LLM{base: fake.URL, key: "lk", model: "x"}}
 
 	resp, err := rag.Ask(context.Background(), "¿Cada cuánto se prueba el plan de continuidad?")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := len(hibridaBody["prefetch"].([]any)); n != 2 {
-		t.Errorf("esperaba 2 prefetch (dense + bm25), hubo %d", n)
+	if vs.gotQuery != "¿Cada cuánto se prueba el plan de continuidad?" {
+		t.Errorf("Hibrida no recibió la pregunta: %q", vs.gotQuery)
+	}
+	if vs.gotDenseLen != 2 {
+		t.Errorf("Hibrida no recibió el embedding: len=%d", vs.gotDenseLen)
 	}
 	if len(resp.Citas) != 1 || resp.CitasDescartadas != 1 {
 		t.Errorf("citas válidas=%d descartadas=%d", len(resp.Citas), resp.CitasDescartadas)

@@ -173,49 +173,24 @@ func TestDoJSONRespetaContext(t *testing.T) {
 	}
 }
 
-func TestQdrantCrearYaExisteEsExito(t *testing.T) {
-	var puts atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "PUT" && r.URL.Path == "/collections/c":
-			puts.Add(1)
-			w.WriteHeader(409)
-			w.Write([]byte(`{"status":{"error":"Collection ` + "`c`" + ` already exists!"}}`))
-		case r.Method == "PUT" && r.URL.Path == "/collections/c/index":
-			w.Write([]byte(`{"result":true}`))
-		default:
-			w.WriteHeader(404)
-		}
-	}))
-	defer srv.Close()
-	q := &Qdrant{base: srv.URL, key: "k", coll: "c"}
-	if err := q.crear(context.Background(), 4); err != nil {
-		t.Fatalf("'ya existe' debía ser éxito: %v", err)
-	}
-}
+// TestFusionarRRF reemplaza a los viejos tests de Qdrant.Asegurar/crear (ese
+// cliente HTTP ya no existe, ver pgvectorstore.go): lo que ahora hace falta
+// probar sin una base real es la fusión por reciprocal rank fusion que
+// reemplaza el fusion:"rrf" server-side de Qdrant.
+func TestFusionarRRF(t *testing.T) {
+	a := Chunk{ChunkID: "a"}
+	b := Chunk{ChunkID: "b"}
+	c := Chunk{ChunkID: "c"}
+	dense := []Hit{{Payload: a}, {Payload: b}}  // a en rank 1, b en rank 2
+	lexico := []Hit{{Payload: b}, {Payload: c}} // b en rank 1, c en rank 2
 
-func TestQdrantAsegurarDimension(t *testing.T) {
-	var borrado atomic.Bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/collections/c":
-			w.Write([]byte(`{"result":{"config":{"params":{"vectors":{"dense":{"size":1024}}}}}}`))
-		case r.Method == "DELETE":
-			borrado.Store(true)
-			w.Write([]byte(`{"result":true}`))
-		default:
-			w.Write([]byte(`{"result":true}`))
-		}
-	}))
-	defer srv.Close()
-	q := &Qdrant{base: srv.URL, key: "k", coll: "c"}
-	if err := q.Asegurar(context.Background(), 2048, false); err == nil || borrado.Load() {
-		t.Errorf("sin reset y con otra dimensión debía fallar sin borrar (err=%v)", err)
+	out := fusionarRRF(dense, lexico)
+	if len(out) != 3 {
+		t.Fatalf("esperaba 3 hits fusionados, hubo %d", len(out))
 	}
-	if err := q.Asegurar(context.Background(), 1024, false); err != nil {
-		t.Errorf("misma dimensión debía pasar: %v", err)
-	}
-	if err := q.Asegurar(context.Background(), 2048, true); err != nil || !borrado.Load() {
-		t.Errorf("con reset debía borrar y recrear (err=%v borrado=%v)", err, borrado.Load())
+	// b aparece en ambas listas (rank 2 + rank 1): debe ganarle a a y c, que
+	// solo aparecen en una.
+	if out[0].Payload.ChunkID != "b" {
+		t.Errorf("esperaba que %q ganara por aparecer en ambas listas, ganó %q", "b", out[0].Payload.ChunkID)
 	}
 }
