@@ -22,3 +22,23 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Connecting the Biblioteca view to modules/ingesta
+
+By default `/biblioteca` reads the demo fixtures in `src/lib/demo/fixtures.ts`
+(`src/services/index.ts`'s `demoProvider`). To read real documents from
+`modules/ingesta`'s API instead:
+
+1. Start ingesta's API: `make -C ../ingesta api` (or `docker compose up ingesta`
+   from the repo root), reachable at `http://localhost:8000` by default.
+2. Copy `.env.example` to `.env.local` and set `VITE_SERVICES_MODE=backend`.
+   Adjust `INGESTA_API_URL` if ingesta isn't on the default port.
+3. Run `npm run dev` as usual.
+
+`src/services/index.ts`'s `backendProvider` calls ingesta through TanStack
+Start server functions (`src/server/functions/documents.ts`), so
+`INGESTA_API_URL` is read server-side only and never reaches the browser.
+`src/server/ingesta-adapter.ts` maps ingesta's document-graph model onto this
+app's `NormativeDocument` shape — see that file's header comment for the
+simplifications involved (one ingesta `doc_id` becomes one document with a
+single synthetic version, not a full version history).

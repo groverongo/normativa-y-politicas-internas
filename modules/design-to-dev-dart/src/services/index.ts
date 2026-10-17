@@ -3,11 +3,7 @@
  * provider; swap `demoProvider` for a backend provider (server functions)
  * implementing the same interface without touching components.
  */
-import type {
-  ConsultAnswer,
-  NormativeDocument,
-  ValidationFinding,
-} from "@/lib/domain/types";
+import type { ConsultAnswer, NormativeDocument, ValidationFinding } from "@/lib/domain/types";
 import { runLocalChecks } from "@/lib/domain/validity";
 import {
   DEMO_REFERENCE_DATE,
@@ -15,6 +11,7 @@ import {
   demoDocuments,
   insufficientAnswer,
 } from "@/lib/demo/fixtures";
+import { getDocumentFn, listDocumentsFn } from "@/server/functions/documents";
 
 export interface ProcessingStatus {
   documentCode: string;
@@ -29,7 +26,10 @@ export interface HorizonteServices {
   referenceDate: () => string;
   listDocuments: () => Promise<NormativeDocument[]>;
   getDocument: (code: string) => Promise<NormativeDocument | null>;
-  askQuestion: (question: string, onStage?: (stage: ConsultStage) => void) => Promise<ConsultAnswer>;
+  askQuestion: (
+    question: string,
+    onStage?: (stage: ConsultStage) => void,
+  ) => Promise<ConsultAnswer>;
   runValidations: () => Promise<ValidationFinding[]>;
   getProcessingStatus: (code: string) => Promise<ProcessingStatus>;
   uploadDocument: (file: File) => Promise<never>;
@@ -52,7 +52,12 @@ const demoProvider: HorizonteServices = {
   },
   async askQuestion(question, onStage) {
     // Simulated timings: the demo has no real pipeline behind these stages.
-    for (const [stage, ms] of [["consulta", 500], ["recuperacion", 1100], ["vigencia", 900], ["respuesta", 600]] as const) {
+    for (const [stage, ms] of [
+      ["consulta", 500],
+      ["recuperacion", 1100],
+      ["vigencia", 900],
+      ["respuesta", 600],
+    ] as const) {
       onStage?.(stage);
       await delay(ms);
     }
@@ -85,4 +90,37 @@ const demoProvider: HorizonteServices = {
   },
 };
 
-export const services: HorizonteServices = demoProvider;
+const backendProvider: HorizonteServices = {
+  mode: "backend",
+  referenceDate: () => new Date().toISOString().slice(0, 10),
+  async listDocuments() {
+    return listDocumentsFn();
+  },
+  async getDocument(code) {
+    return getDocumentFn({ data: code });
+  },
+  async askQuestion() {
+    throw new NotImplementedError(
+      "El asistente de consultas normativas aún no está conectado al backend.",
+    );
+  },
+  async runValidations() {
+    const docs = await backendProvider.listDocuments();
+    return runLocalChecks(docs, backendProvider.referenceDate());
+  },
+  async getProcessingStatus(code) {
+    return {
+      documentCode: code,
+      stage: "no_disponible",
+      detail: "El procesamiento documental aún no está conectado.",
+    };
+  },
+  async uploadDocument() {
+    throw new NotImplementedError(
+      "La carga de documentos estará disponible cuando se conecte el almacenamiento y el procesamiento documental.",
+    );
+  },
+};
+
+export const services: HorizonteServices =
+  import.meta.env.VITE_SERVICES_MODE === "backend" ? backendProvider : demoProvider;
