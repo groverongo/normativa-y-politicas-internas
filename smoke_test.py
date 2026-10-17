@@ -501,11 +501,49 @@ def test_ingest_examples() -> None:
     )
 
 
+def test_api_health_and_ingest() -> None:
+    from fastapi.testclient import TestClient
+
+    import api
+
+    with TestClient(api.app) as client:
+        health_resp = client.get("/health")
+        check(health_resp.status_code == 200, "GET /health returns 200")
+        check(health_resp.json().get("llm_provider") == "mock", "/health reports llm_provider=mock")
+
+        ingest_resp = client.post(
+            "/ingest",
+            json={"source_name": "SMOKE-API-2024", "text": "ID: SMOKE-API-2024\nFecha: 2024-01-01\nTexto de prueba."},
+        )
+        check(ingest_resp.status_code == 200, f"POST /ingest returns 200 (got {ingest_resp.status_code})")
+        body = ingest_resp.json()
+        check(bool(body.get("run_id")), "ingest response has a non-empty run_id")
+        check(len(body.get("results", [])) == 1, "ingest response has exactly one result")
+
+        batch_resp = client.post("/ingest/batch", json={"documents": []})
+        check(batch_resp.status_code == 422, "POST /ingest/batch with empty documents returns 422")
+
+        docs_resp = client.get("/documents")
+        check(docs_resp.status_code == 200, "GET /documents returns 200")
+        check(
+            any(d["doc_id"] == "SMOKE-API-2024" for d in docs_resp.json()),
+            "GET /documents includes the just-ingested document",
+        )
+
+        summary_resp = client.get(f"/runs/{body['run_id']}/summary")
+        check(summary_resp.status_code == 200, "GET /runs/{run_id}/summary returns 200 for a known run")
+
+        traversal_resp = client.get("/runs/../summary")
+        check(traversal_resp.status_code == 404, "GET /runs/{run_id}/summary rejects a '..' run_id")
+
+
 def main() -> int:
     print("=== (a) build_case_operations vs. section 3 table ===")
     test_case_operations()
     print("\n=== (b) ingest sample_docs/examples with the seed corpus ===")
     test_ingest_examples()
+    print("\n=== (c) FastAPI layer: /health, /ingest, /documents, /runs ===")
+    test_api_health_and_ingest()
 
     print()
     if FAILURES:
