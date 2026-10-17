@@ -34,6 +34,18 @@ class Settings(BaseSettings):
     # Orquestador: pausa de cada agente stub, para que la demo muestre el avance (0 = sin pausa)
     agent_stub_delay_ms: int = 1000
 
+    # Ingestion pipeline (Classifier/Extraction/Validation/Graph-Update), ported
+    # from modules/ingesta/config.py's Settings. API keys are read inside the
+    # provider classes (app/services/llm_provider.py), not here.
+    llm_provider: str = "mock"
+    llm_model: str | None = None
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 4096
+    openai_base_url: str | None = None
+    max_reclassify_attempts: int = 2
+    max_impact_docs: int = 5
+    max_cascade_depth: int = 1
+
     @property
     def database_url(self) -> URL:
         # URL.create escapa caracteres especiales del password (@, :, /, etc.)

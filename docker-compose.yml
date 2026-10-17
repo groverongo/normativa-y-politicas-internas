@@ -2,23 +2,58 @@
 # module's own .env file. Each module stays independent -- no shared network
 # dependency between them beyond what's defined here.
 #
-#   ./docker-up.sh                 # build + start both modules
+#   ./docker-up.sh                 # build + start both modules + local db
 #   ./docker-up.sh up --build api  # pass any args through to `docker compose`
 #
-# Host ports are overridable via INGESTA_PORT / NTTBANCA_PORT env vars in
-# case 8000/8001 are already taken on your machine.
+# Host ports are overridable via INGESTA_PORT / NTTBANCA_PORT / DB_PORT env
+# vars in case 8000/8001/5433 are already taken on your machine.
+#
+# Local Postgres: both modules' .env files point DB_HOST at a remote AWS RDS
+# instance by default. The `environment:` overrides below replace those with
+# the local `db` service instead, so nothing here touches the real RDS.
+# ingesta and nttbanca-n keep separate databases on that same instance --
+# their `documents` table schemas have diverged (source_uri vs. raw_text),
+# so they can't share one database. See db-init/01-create-ingesta-db.sql.
 
 services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: nttbanca
+      POSTGRES_USER: nttbanca
+      POSTGRES_PASSWORD: nttbanca
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nttbanca -d nttbanca"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   ingesta:
     build:
       context: ./modules/ingesta
     image: ingesta
     env_file:
       - ./modules/ingesta/.env
+    environment:
+      STORAGE_BACKEND: postgres
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ingesta
+      DB_USER: nttbanca
+      DB_PASSWORD: nttbanca
+      DB_SSLMODE: disable
     ports:
       - "${INGESTA_PORT:-8000}:8000"
     volumes:
       - ./modules/ingesta/runs:/app/runs
+    depends_on:
+      db:
+        condition: service_healthy
 
   nttbanca-n:
     build:
@@ -26,5 +61,18 @@ services:
     image: nttbanca-api
     env_file:
       - ./modules/nttbanca-n/.env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: nttbanca
+      DB_USER: nttbanca
+      DB_PASSWORD: nttbanca
+      DB_SSLMODE: disable
     ports:
       - "${NTTBANCA_PORT:-8001}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -30,3 +30,33 @@ class Agente(StrEnum):
 class EstadoPaso(StrEnum):
     COMPLETADO = "COMPLETADO"
     ERROR = "ERROR"
+
+
+class DocStatus(StrEnum):
+    """Lifecycle status of a `documents` row (ingestion pipeline), ported from
+    modules/ingesta/schema.py's DocStatus."""
+
+    ACTIVE = "ACTIVE"
+    SUPERSEDED = "SUPERSEDED"
+    PARTIALLY_SUPERSEDED = "PARTIALLY_SUPERSEDED"
+    REVOKED = "REVOKED"
+    EXPIRED = "EXPIRED"
+
+
+class LineageRelation(StrEnum):
+    """Edge type in `document_lineage` (ingestion pipeline), ported from
+    modules/ingesta/schema.py's LineageMetadata field names."""
+
+    SUPERSEDES = "supersedes"
+    SUPERSEDED_BY = "superseded_by"
+    AMENDS = "amends"
+    PATCHED_BY = "patched_by"
+    CONSOLIDATES = "consolidates"
+    SPLIT_FROM = "split_from"
+    SPLIT_INTO = "split_into"
+    CONTRADICTS = "contradicts"
+    REVOKES = "revokes"
+    REVOKED_BY = "revoked_by"
+    OVERRIDES = "overrides"
+    OVERRIDDEN_BY = "overridden_by"
+    IMPACTS = "impacts"

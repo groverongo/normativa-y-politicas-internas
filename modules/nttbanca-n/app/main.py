@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import models  # noqa: F401  (registra los modelos en Base.metadata)
-from app.api.routes import consultas, files, health, items
+from app.api.routes import consultas, files, health, ingest, items
 from app.core.config import get_settings
 from app.db.migrate import run_migrations
 from app.db.session import engine
@@ -34,3 +34,4 @@ app.include_router(health.router)
 app.include_router(items.router)
 app.include_router(files.router)
 app.include_router(consultas.router)
+app.include_router(ingest.router)

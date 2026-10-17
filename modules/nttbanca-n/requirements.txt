@@ -3,3 +3,10 @@ SQLAlchemy==2.1.5
 psycopg[binary]==3.3.6
 boto3==1.43.114
 pydantic-settings==2.16.0
+
+# Optional: only needed if you set LLM_PROVIDER to a real provider for the
+# ingestion pipeline (see .env.example). Lazily imported, so absence is fine
+# for the default LLM_PROVIDER=mock.
+# anthropic>=0.34.0
+# openai>=1.40.0
+# google-genai>=0.3.0
