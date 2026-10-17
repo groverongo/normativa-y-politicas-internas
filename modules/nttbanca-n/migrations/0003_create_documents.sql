@@ -1,8 +1,14 @@
--- Documents: the metadata "node" for each ingested regulatory/policy document,
--- ported from modules/ingesta/migrations/0001_create_documents.sql (Up section
--- only -- this runner has no Up/Down marker support, see app/db/migrate.py).
--- Mirrors app/schemas/lifecycle.py's DocumentMetadata.identity_metadata +
--- lifecycle_metadata. This is additive: separate from `items`/`files`.
+-- Documents: the metadata "node" for each ingested regulatory/policy document.
+-- Shared by both modules/ingesta's S3DbStorage and modules/nttbanca-n's
+-- DocumentGraphStorage -- raw text lives in S3 (source_uri is the S3 object
+-- key), the metadata graph lives here. Mirrors identity_metadata +
+-- lifecycle_metadata in both modules' schema/lifecycle pydantic models.
+-- Lineage edges live in a separate table -- see 0005_create_document_lineage.sql.
+--
+-- Reconciles an earlier divergence where nttbanca-n's ported copy of this
+-- table used an inline `raw_text` column instead of `source_uri`: source_uri
+-- (S3-backed) is the canonical design, matching ingesta's original storage.py
+-- and nttbanca-n's existing S3 infrastructure (app/services/s3.py).
 
 CREATE TYPE doc_status AS ENUM (
     'ACTIVE',
@@ -17,7 +23,7 @@ CREATE TABLE documents (
     doc_type              TEXT NOT NULL DEFAULT 'unknown',
     title                 TEXT NOT NULL DEFAULT '',
     issuer                TEXT NOT NULL DEFAULT '',
-    raw_text              TEXT NOT NULL DEFAULT '',
+    source_uri            TEXT,                        -- S3 object key holding the raw document text
     status                doc_status NOT NULL DEFAULT 'ACTIVE',
     valid_from            DATE,
     valid_until           DATE,

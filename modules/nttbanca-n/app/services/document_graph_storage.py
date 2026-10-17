@@ -6,9 +6,14 @@ in app/models/document.py, instead of ingesta's raw-psycopg S3DbStorage --
 this keeps one DB-access style in the service (the existing app/crud/*.py
 files are the precedent). chunk_text() and apply_operation()'s dispatch
 logic are ported verbatim (pure functions, no I/O).
+
+Raw document text lives in S3 (documents.source_uri is the object key), via
+the same app/services/s3.py S3Service used by app/services/files.py -- not
+inline in Postgres. This mirrors modules/ingesta/storage.py's S3DbStorage.
 """
 from __future__ import annotations
 
+import io
 import re
 from typing import Any, Iterable
 
@@ -34,6 +39,7 @@ from app.schemas.lifecycle import (
     StoredDocument,
     normalize_doc_id,
 )
+from app.services.s3 import S3ObjectNotFoundError, S3Service
 
 _NUM_YEAR = re.compile(r"(\d+)-(\d{4})")
 
@@ -72,8 +78,26 @@ def chunk_text(text: str, max_chars: int = 1500) -> list[str]:
 class DocumentGraphStorage:
     """SQLAlchemy-backed implementation of ingesta's StorageInterface contract."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, s3: S3Service) -> None:
         self.db = db
+        self.s3 = s3
+
+    # ---- S3 helpers (raw text, keyed by doc_id -- mirrors ingesta's S3DbStorage) ----
+    def _s3_key(self, doc_id: str) -> str:
+        prefix = self.s3.key_prefix
+        return f"{prefix}/{doc_id}.txt" if prefix else f"{doc_id}.txt"
+
+    def _put_raw_text(self, doc_id: str, raw_text: str) -> str:
+        key = self._s3_key(doc_id)
+        self.s3.upload(key, io.BytesIO(raw_text.encode("utf-8")), content_type="text/plain")
+        return key
+
+    def _get_raw_text(self, key: str) -> str | None:
+        try:
+            chunks, _ = self.s3.download(key)
+        except S3ObjectNotFoundError:
+            return None
+        return b"".join(chunks).decode("utf-8")
 
     # ---- reads ----
     def check_document_exists(self, doc_id: str) -> bool:
@@ -96,7 +120,9 @@ class DocumentGraphStorage:
 
     def get_document_text(self, doc_id: str) -> str | None:
         row = self.db.get(Document, doc_id)
-        return row.raw_text if row is not None else None
+        if row is None or not row.source_uri:
+            return None
+        return self._get_raw_text(row.source_uri)
 
     def list_documents(self, status: DocStatus | None = None) -> list[DocumentMetadata]:
         stmt = select(Document.doc_id)
@@ -131,13 +157,24 @@ class DocumentGraphStorage:
         exclude_set = set(exclude)
         term_lower = term.lower()
         stmt = select(Document).where(Document.status == DocStatus.ACTIVE.value)
-        matches: list[str] = []
+        matches: set[str] = set()
+        remaining: list[str] = []
         for row in self.db.scalars(stmt):
             if row.doc_id in exclude_set:
                 continue
             referenced = [t.lower() for t in (row.referenced_terms or [])]
-            if term_lower in referenced or term_lower in (row.raw_text or "").lower():
-                matches.append(row.doc_id)
+            if term_lower in referenced:
+                matches.add(row.doc_id)
+            else:
+                remaining.append(row.doc_id)
+
+        if remaining:
+            chunk_stmt = (
+                select(DocumentChunk.doc_id)
+                .where(DocumentChunk.doc_id.in_(remaining), DocumentChunk.text.ilike(f"%{term}%"))
+                .distinct()
+            )
+            matches.update(self.db.scalars(chunk_stmt))
         return sorted(matches)
 
     def _load_metadata(self, doc_id: str) -> DocumentMetadata | None:
@@ -182,7 +219,7 @@ class DocumentGraphStorage:
                 topic_tags=list(row.topic_tags or []),
                 defined_terms=list(row.defined_terms or []),
                 referenced_terms=list(row.referenced_terms or []),
-                source_uri=None,
+                source_uri=row.source_uri,
             ),
             lifecycle_metadata=LifecycleMetadata(
                 status=DocStatus(row.status),
@@ -202,13 +239,14 @@ class DocumentGraphStorage:
         doc_id = metadata.doc_id
         ident = metadata.identity_metadata
         life = metadata.lifecycle_metadata
+        source_uri = self._put_raw_text(doc_id, raw_text)
 
         row = Document(
             doc_id=doc_id,
             doc_type=ident.doc_type,
             title=ident.title,
             issuer=ident.issuer,
-            raw_text=raw_text,
+            source_uri=source_uri,
             status=life.status.value,
             valid_from=_parse_date(life.valid_from),
             valid_until=_parse_date(life.valid_until),

@@ -3,10 +3,13 @@
 `InMemoryStorage` is a dict-backed stand-in (default, `STORAGE_BACKEND=memory`,
 needs no external services) so the pipeline and smoke tests run with no setup.
 `S3DbStorage` (`STORAGE_BACKEND=postgres`) is the real backend: raw document
-text lives in S3, the metadata graph lives in Postgres per the schema in
-`migrations/*.sql` (documents, chunks, document_lineage,
-document_definition_sources, document_patches). `get_storage(settings)` picks
-the right one from `Settings.storage_backend`.
+text lives in S3, the metadata graph lives in Postgres per the shared schema
+in `../nttbanca-n/migrations/*.sql` (documents, chunks, document_lineage,
+document_definition_sources, document_patches -- shared with
+modules/nttbanca-n, the repo's one migration sequence; run `make migrate`
+from the repo root before using this backend, see
+../nttbanca-n/migrations/README.md). `get_storage(settings)` picks the right
+one from `Settings.storage_backend`.
 """
 from __future__ import annotations
 
@@ -333,28 +336,10 @@ def _date_str(value: Any) -> str | None:
     return value.isoformat()
 
 
-_MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
-_MIGRATE_UP_MARKER = "-- +migrate Up"
-_MIGRATE_DOWN_MARKER = "-- +migrate Down"
-
-
-def _migration_up_sql(text: str) -> str:
-    """Slice out the "-- +migrate Up" section of a migrations/*.sql file.
-
-    Returned as one string and executed as a single statement: Postgres's
-    simple query protocol splits it on top-level `;` itself, correctly
-    skipping semicolons inside `$$ ... $$` function bodies (see 0001's
-    `set_updated_at` trigger function) and wraps it in one implicit
-    transaction, so a failing migration doesn't leave a half-applied schema.
-    """
-    start = text.find(_MIGRATE_UP_MARKER)
-    end = text.find(_MIGRATE_DOWN_MARKER)
-    start = start + len(_MIGRATE_UP_MARKER) if start != -1 else 0
-    return text[start:end] if end != -1 else text[start:]
-
-
 class S3DbStorage(StorageInterface):
-    """Raw text in S3, metadata graph in Postgres (see migrations/*.sql).
+    """Raw text in S3, metadata graph in Postgres (see
+    ../nttbanca-n/migrations/*.sql, shared with modules/nttbanca-n -- run
+    `make migrate` from the repo root before using this backend).
 
     `psycopg` and `boto3` are lazily imported, mirroring llm_provider.py's
     real-provider classes, so the default memory backend never needs them.
@@ -395,29 +380,12 @@ class S3DbStorage(StorageInterface):
         if settings.db_sslmode:
             conn_kwargs["sslmode"] = settings.db_sslmode
         self._conn = psycopg.connect(**conn_kwargs, autocommit=True, row_factory=dict_row)
-        if settings.db_auto_create_tables:
-            self._ensure_schema()
 
         self._s3 = boto3.client(
             "s3", region_name=settings.aws_region, endpoint_url=settings.s3_endpoint_url or None
         )
         self._bucket = settings.s3_bucket_name
         self._prefix = settings.s3_key_prefix
-
-    def _ensure_schema(self) -> None:
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "SELECT 1 FROM information_schema.tables "
-                "WHERE table_schema = 'public' AND table_name = 'documents'"
-            )
-            if cur.fetchone() is not None:
-                return
-        for path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
-            up_sql = _migration_up_sql(path.read_text(encoding="utf-8")).strip()
-            if not up_sql:
-                continue
-            with self._conn.cursor() as cur:
-                cur.execute(up_sql)
 
     # ---- S3 helpers ----
     def _s3_key(self, doc_id: str) -> str:

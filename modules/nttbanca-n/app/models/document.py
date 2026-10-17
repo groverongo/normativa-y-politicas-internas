@@ -1,11 +1,11 @@
 """ORM models for the ingestion pipeline's document-lifecycle graph.
 
-Ported from modules/ingesta/schema.py + migrations/0001..0005. Additive to
-`items`/`files`: these tables are not referenced by app/models/item.py or
-app/models/file.py. Registered in app.main via app/models/__init__.py so
-Base.metadata picks them up (used by tests/conftest.py's
-Base.metadata.create_all(sqlite_engine) and, on Postgres, by the migrations
-in migrations/0003..0007).
+Ported from modules/ingesta/schema.py. Additive to `items`/`files`: these
+tables are not referenced by app/models/item.py or app/models/file.py.
+Registered in app.main via app/models/__init__.py so Base.metadata picks them
+up (used by tests/conftest.py's Base.metadata.create_all(sqlite_engine) and,
+on Postgres, by the repo-root /migrations/0003..0007, shared with
+modules/ingesta).
 
 JSON columns use JSON().with_variant(JSONB(), "postgresql") -- same pattern
 as app/models/ejecucion.py's PasoAgente.salida -- so these models work on
@@ -49,7 +49,7 @@ class Document(Base):
     doc_type: Mapped[str] = mapped_column(String, nullable=False, default="unknown")
     title: Mapped[str] = mapped_column(String, nullable=False, default="")
     issuer: Mapped[str] = mapped_column(String, nullable=False, default="")
-    raw_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_uri: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[DocStatus] = mapped_column(
         _DocStatusType, nullable=False, default=DocStatus.ACTIVE, server_default=DocStatus.ACTIVE.value
     )

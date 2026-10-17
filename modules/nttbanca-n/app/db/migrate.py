@@ -4,6 +4,11 @@ Cada archivo migrations/NNNN_descripcion.sql se aplica una sola vez, en orden, y
 registrado en la tabla schema_migrations. Todo corre en una sola transacción: si una
 migración falla, no queda ninguna aplicada a medias.
 
+Esta es la única secuencia de migraciones del monorepo: ingesta y nttbanca-n
+comparten una sola base de datos, y modules/ingesta ya no se auto-migra (ver
+migrations/README.md) -- corre esto antes de usar STORAGE_BACKEND=postgres
+en ingesta.
+
 Uso, desde la raíz del proyecto:
     python -m app.db.migrate             aplica las pendientes
     python -m app.db.migrate --status    muestra aplicadas y pendientes

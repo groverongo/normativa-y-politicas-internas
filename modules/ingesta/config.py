@@ -29,13 +29,6 @@ def _env_int(name: str, default: int) -> int:
     return int(val) if val not in (None, "") else default
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    val = os.environ.get(name)
-    if val in (None, ""):
-        return default
-    return val.strip().lower() in ("1", "true", "yes", "on")
-
-
 @dataclass(frozen=True)
 class Settings:
     llm_provider: str = "mock"
@@ -55,7 +48,6 @@ class Settings:
     db_user: str | None = None
     db_sslmode: str | None = None
     db_connect_timeout: int = 10
-    db_auto_create_tables: bool = False
     aws_region: str | None = None
     s3_bucket_name: str | None = None
     s3_endpoint_url: str | None = None
@@ -83,7 +75,6 @@ class Settings:
             db_user=_env_str("DB_USER", None),
             db_sslmode=_env_str("DB_SSLMODE", None),
             db_connect_timeout=_env_int("DB_CONNECT_TIMEOUT", 10),
-            db_auto_create_tables=_env_bool("DB_AUTO_CREATE_TABLES", False),
             aws_region=_env_str("AWS_REGION", None),
             s3_bucket_name=_env_str("S3_BUCKET_NAME", None),
             s3_endpoint_url=_env_str("S3_ENDPOINT_URL", None),
