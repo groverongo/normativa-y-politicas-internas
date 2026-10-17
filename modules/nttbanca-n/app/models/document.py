@@ -14,7 +14,7 @@ both the real Postgres backend and the SQLite-in-memory test engine.
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +22,21 @@ from app.db.base import Base
 from app.models.enums import DocStatus, LineageRelation
 
 _JSONList = JSON().with_variant(JSONB(), "postgresql")
+
+# native_enum degrades to VARCHAR+CHECK on SQLite automatically; on Postgres
+# it binds to the `doc_status`/`lineage_relation` types created by
+# migrations/0003 and 0005 (create_type=False: those migrations own the
+# type, not SQLAlchemy's create_all). values_callable stores the member
+# *value* (matches the ENUM labels, e.g. "supersedes") rather than the
+# Python member name (e.g. "SUPERSEDES").
+_DocStatusType = Enum(
+    DocStatus, name="doc_status", native_enum=True, create_type=False,
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
+)
+_LineageRelationType = Enum(
+    LineageRelation, name="lineage_relation", native_enum=True, create_type=False,
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
+)
 
 
 class Document(Base):
@@ -36,7 +51,7 @@ class Document(Base):
     issuer: Mapped[str] = mapped_column(String, nullable=False, default="")
     raw_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[DocStatus] = mapped_column(
-        String(30), nullable=False, default=DocStatus.ACTIVE, server_default=DocStatus.ACTIVE.value
+        _DocStatusType, nullable=False, default=DocStatus.ACTIVE, server_default=DocStatus.ACTIVE.value
     )
     valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -81,7 +96,7 @@ class DocumentLineage(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     doc_id: Mapped[str] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"), nullable=False)
-    relation: Mapped[LineageRelation] = mapped_column(String(30), nullable=False)
+    relation: Mapped[LineageRelation] = mapped_column(_LineageRelationType, nullable=False)
     target_doc_id: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
