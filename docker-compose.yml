@@ -1,0 +1,30 @@
+# Monorepo root compose: builds each module's own Dockerfile and loads that
+# module's own .env file. Each module stays independent -- no shared network
+# dependency between them beyond what's defined here.
+#
+#   ./docker-up.sh                 # build + start both modules
+#   ./docker-up.sh up --build api  # pass any args through to `docker compose`
+#
+# Host ports are overridable via INGESTA_PORT / NTTBANCA_PORT env vars in
+# case 8000/8001 are already taken on your machine.
+
+services:
+  ingesta:
+    build:
+      context: ./modules/ingesta
+    image: ingesta
+    env_file:
+      - ./modules/ingesta/.env
+    ports:
+      - "${INGESTA_PORT:-8000}:8000"
+    volumes:
+      - ./modules/ingesta/runs:/app/runs
+
+  nttbanca-n:
+    build:
+      context: ./modules/nttbanca-n
+    image: nttbanca-api
+    env_file:
+      - ./modules/nttbanca-n/.env
+    ports:
+      - "${NTTBANCA_PORT:-8001}:8000"
