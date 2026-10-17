@@ -19,7 +19,7 @@ from config import Settings
 from llm_provider import LLMError, get_provider
 from logging_trace import InteractionLogger
 from pipeline import IngestionPipeline
-from storage import InMemoryStorage
+from storage import InMemoryStorage, StorageError, get_storage
 
 
 def _build_ingest_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -89,6 +89,12 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             "Set LLM_PROVIDER=anthropic|openai|gemini (and LLM_MODEL) for a real run.",
             file=sys.stderr,
         )
+    if settings.storage_backend == "memory":
+        print(
+            "WARNING: running with in-memory storage (non-persistent, lost on exit). "
+            "Set STORAGE_BACKEND=postgres (and DATABASE_URL, S3_BUCKET) for persistent storage.",
+            file=sys.stderr,
+        )
 
     try:
         provider = get_provider(settings)
@@ -101,6 +107,14 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         print(f"error: path not found: {path}", file=sys.stderr)
         return 1
 
+    if args.seed and settings.storage_backend != "memory":
+        print(
+            f"error: --seed is only supported with the memory storage backend "
+            f"(STORAGE_BACKEND={settings.storage_backend!r})",
+            file=sys.stderr,
+        )
+        return 1
+
     if args.seed:
         seed_path = Path(args.seed)
         if not seed_path.exists():
@@ -108,7 +122,11 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             return 1
         storage = InMemoryStorage.from_seed_file(seed_path)
     else:
-        storage = InMemoryStorage()
+        try:
+            storage = get_storage(settings)
+        except StorageError as exc:
+            print(f"error: could not initialize storage backend: {exc}", file=sys.stderr)
+            return 1
 
     logger = InteractionLogger(settings.runs_dir)
     pipeline = IngestionPipeline(storage, provider, logger, settings)

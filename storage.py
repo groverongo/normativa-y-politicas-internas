@@ -1,24 +1,32 @@
-"""Storage seam: StorageInterface (stub) + InMemoryStorage implementation.
+"""Storage seam: StorageInterface + two implementations.
 
-Per the spec, real S3/file storage and a real database are being built by a
-separate workstream. Every mutating/reading method below is marked with
-`# TODO: link to real S3/DB client` — this class is a stand-in so the
-ingestion pipeline can be built and demoed without that integration.
+`InMemoryStorage` is a dict-backed stand-in (default, `STORAGE_BACKEND=memory`,
+needs no external services) so the pipeline and smoke tests run with no setup.
+`S3DbStorage` (`STORAGE_BACKEND=postgres`) is the real backend: raw document
+text lives in S3, the metadata graph lives in Postgres per the schema in
+`migrations/*.sql` (documents, chunks, document_lineage,
+document_definition_sources, document_patches). `get_storage(settings)` picks
+the right one from `Settings.storage_backend`.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Iterable
 
+from config import Settings
 from schema import (
     CatalogEntry,
     Chunk,
     DocStatus,
     DocumentMetadata,
     GraphOperation,
+    IdentityMetadata,
+    LifecycleMetadata,
+    LineageMetadata,
     PatchRecord,
     StoredDocument,
     normalize_doc_id,
@@ -298,3 +306,444 @@ class InMemoryStorage(StorageInterface):
     def snapshot(self) -> dict:
         # TODO: link to real S3/DB client
         return {doc_id: stored.model_dump(mode="json") for doc_id, stored in self._docs.items()}
+
+
+# ---------------------------------------------------------------------------
+# Real backend: S3 (raw text) + Postgres (metadata graph)
+# ---------------------------------------------------------------------------
+
+
+class StorageError(RuntimeError):
+    """Raised for any S3DbStorage initialization or operation failure."""
+
+
+_LINEAGE_FIELDS: tuple[str, ...] = (
+    "supersedes", "superseded_by", "amends", "patched_by", "consolidates",
+    "split_from", "split_into", "contradicts", "revokes", "revoked_by",
+    "overrides", "overridden_by", "impacts",
+)
+
+_LIFECYCLE_SCALAR_FIELDS = {"valid_from", "valid_until", "version"}
+_LIFECYCLE_JSON_LIST_FIELDS = {"review_flags", "missing_dependencies", "notes"}
+
+
+def _date_str(value: Any) -> str | None:
+    if value is None or isinstance(value, str):
+        return value
+    return value.isoformat()
+
+
+_MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+_MIGRATE_UP_MARKER = "-- +migrate Up"
+_MIGRATE_DOWN_MARKER = "-- +migrate Down"
+
+
+def _migration_up_sql(text: str) -> str:
+    """Slice out the "-- +migrate Up" section of a migrations/*.sql file.
+
+    Returned as one string and executed as a single statement: Postgres's
+    simple query protocol splits it on top-level `;` itself, correctly
+    skipping semicolons inside `$$ ... $$` function bodies (see 0001's
+    `set_updated_at` trigger function) and wraps it in one implicit
+    transaction, so a failing migration doesn't leave a half-applied schema.
+    """
+    start = text.find(_MIGRATE_UP_MARKER)
+    end = text.find(_MIGRATE_DOWN_MARKER)
+    start = start + len(_MIGRATE_UP_MARKER) if start != -1 else 0
+    return text[start:end] if end != -1 else text[start:]
+
+
+class S3DbStorage(StorageInterface):
+    """Raw text in S3, metadata graph in Postgres (see migrations/*.sql).
+
+    `psycopg` and `boto3` are lazily imported, mirroring llm_provider.py's
+    real-provider classes, so the default memory backend never needs them.
+    """
+
+    def __init__(self, settings: Settings) -> None:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+        except ImportError as exc:
+            raise StorageError(
+                "S3DbStorage requires the 'psycopg[binary]' package. "
+                "Install it with `pip install psycopg[binary]`."
+            ) from exc
+        try:
+            import boto3
+        except ImportError as exc:
+            raise StorageError(
+                "S3DbStorage requires the 'boto3' package. "
+                "Install it with `pip install boto3`."
+            ) from exc
+        if not (settings.db_host and settings.db_name and settings.db_user):
+            raise StorageError("S3DbStorage requires DB_HOST, DB_NAME, and DB_USER.")
+        db_password = os.environ.get("DB_PASSWORD")
+        if not db_password:
+            raise StorageError("S3DbStorage requires the DB_PASSWORD environment variable.")
+        if not settings.s3_bucket_name:
+            raise StorageError("S3DbStorage requires S3_BUCKET_NAME.")
+
+        conn_kwargs: dict[str, Any] = dict(
+            host=settings.db_host,
+            port=settings.db_port,
+            dbname=settings.db_name,
+            user=settings.db_user,
+            password=db_password,
+            connect_timeout=settings.db_connect_timeout,
+        )
+        if settings.db_sslmode:
+            conn_kwargs["sslmode"] = settings.db_sslmode
+        self._conn = psycopg.connect(**conn_kwargs, autocommit=True, row_factory=dict_row)
+        if settings.db_auto_create_tables:
+            self._ensure_schema()
+
+        self._s3 = boto3.client(
+            "s3", region_name=settings.aws_region, endpoint_url=settings.s3_endpoint_url or None
+        )
+        self._bucket = settings.s3_bucket_name
+        self._prefix = settings.s3_key_prefix
+
+    def _ensure_schema(self) -> None:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = 'documents'"
+            )
+            if cur.fetchone() is not None:
+                return
+        for path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
+            up_sql = _migration_up_sql(path.read_text(encoding="utf-8")).strip()
+            if not up_sql:
+                continue
+            with self._conn.cursor() as cur:
+                cur.execute(up_sql)
+
+    # ---- S3 helpers ----
+    def _s3_key(self, doc_id: str) -> str:
+        prefix = self._prefix
+        if prefix and not prefix.endswith("/"):
+            prefix += "/"
+        return f"{prefix}{doc_id}.txt"
+
+    def _put_raw_text(self, doc_id: str, text: str) -> str:
+        key = self._s3_key(doc_id)
+        self._s3.put_object(Bucket=self._bucket, Key=key, Body=text.encode("utf-8"))
+        return key
+
+    def _get_raw_text(self, key: str) -> str | None:
+        try:
+            obj = self._s3.get_object(Bucket=self._bucket, Key=key)
+        except self._s3.exceptions.NoSuchKey:
+            return None
+        return obj["Body"].read().decode("utf-8")
+
+    # ---- reads ----
+    def check_document_exists(self, doc_id: str) -> bool:
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM documents WHERE doc_id = %s", (doc_id,))
+            return cur.fetchone() is not None
+
+    def resolve_doc_id(self, raw_ref: str) -> str | None:
+        normalized = normalize_doc_id(raw_ref)
+        if self.check_document_exists(normalized):
+            return normalized
+        match = _NUM_YEAR.search(raw_ref)
+        if not match:
+            return None
+        core = f"{match.group(1)}-{match.group(2)}"
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT doc_id FROM documents WHERE doc_id LIKE %s", (f"%{core}",))
+            candidates = [row["doc_id"] for row in cur.fetchall()]
+        return candidates[0] if len(candidates) == 1 else None
+
+    def get_document(self, doc_id: str) -> DocumentMetadata | None:
+        return self._load_metadata(doc_id)
+
+    def get_document_text(self, doc_id: str) -> str | None:
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT source_uri FROM documents WHERE doc_id = %s", (doc_id,))
+            row = cur.fetchone()
+        if row is None or not row["source_uri"]:
+            return None
+        return self._get_raw_text(row["source_uri"])
+
+    def list_documents(self, status: DocStatus | None = None) -> list[DocumentMetadata]:
+        query = "SELECT doc_id FROM documents"
+        params: tuple = ()
+        if status is not None:
+            query += " WHERE status = %s"
+            params = (status.value,)
+        with self._conn.cursor() as cur:
+            cur.execute(query, params)
+            doc_ids = [row["doc_id"] for row in cur.fetchall()]
+        docs = (self._load_metadata(doc_id) for doc_id in doc_ids)
+        return [doc for doc in docs if doc is not None]
+
+    def find_active_documents_referencing_term(
+        self, term: str, exclude: Iterable[str] = ()
+    ) -> list[str]:
+        exclude_list = list(exclude)
+        term_lower = term.lower()
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT doc_id, referenced_terms FROM documents "
+                "WHERE status = %s AND doc_id <> ALL(%s)",
+                (DocStatus.ACTIVE.value, exclude_list),
+            )
+            rows = cur.fetchall()
+
+        matches: set[str] = set()
+        remaining: list[str] = []
+        for row in rows:
+            referenced = [t.lower() for t in (row["referenced_terms"] or [])]
+            if term_lower in referenced:
+                matches.add(row["doc_id"])
+            else:
+                remaining.append(row["doc_id"])
+
+        if remaining:
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    "SELECT DISTINCT doc_id FROM chunks WHERE doc_id = ANY(%s) AND text ILIKE %s",
+                    (remaining, f"%{term}%"),
+                )
+                matches.update(row["doc_id"] for row in cur.fetchall())
+        return sorted(matches)
+
+    def _load_metadata(self, doc_id: str) -> DocumentMetadata | None:
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT * FROM documents WHERE doc_id = %s", (doc_id,))
+            row = cur.fetchone()
+            if row is None:
+                return None
+            cur.execute(
+                "SELECT relation, target_doc_id FROM document_lineage WHERE doc_id = %s",
+                (doc_id,),
+            )
+            lineage_rows = cur.fetchall()
+            cur.execute(
+                "SELECT term, source_doc_id FROM document_definition_sources WHERE doc_id = %s",
+                (doc_id,),
+            )
+            definition_rows = cur.fetchall()
+            cur.execute(
+                "SELECT clause, old_text, new_text, patched_by, effective_date "
+                "FROM document_patches WHERE doc_id = %s ORDER BY id",
+                (doc_id,),
+            )
+            patch_rows = cur.fetchall()
+
+        lineage_data: dict[str, Any] = {field: [] for field in _LINEAGE_FIELDS}
+        for lrow in lineage_rows:
+            lineage_data[lrow["relation"]].append(lrow["target_doc_id"])
+        lineage_data["definition_sources"] = {
+            drow["term"]: drow["source_doc_id"] for drow in definition_rows
+        }
+
+        patch_log = [
+            PatchRecord(
+                clause=prow["clause"],
+                old_text=prow["old_text"],
+                new_text=prow["new_text"],
+                patched_by=prow["patched_by"],
+                effective_date=_date_str(prow["effective_date"]),
+            )
+            for prow in patch_rows
+        ]
+
+        return DocumentMetadata(
+            identity_metadata=IdentityMetadata(
+                doc_id=row["doc_id"],
+                doc_type=row["doc_type"],
+                title=row["title"],
+                issuer=row["issuer"],
+                topic_tags=list(row["topic_tags"] or []),
+                defined_terms=list(row["defined_terms"] or []),
+                referenced_terms=list(row["referenced_terms"] or []),
+                source_uri=row["source_uri"],
+            ),
+            lifecycle_metadata=LifecycleMetadata(
+                status=DocStatus(row["status"]),
+                valid_from=_date_str(row["valid_from"]),
+                valid_until=_date_str(row["valid_until"]),
+                version=row["version"],
+                review_flags=list(row["review_flags"] or []),
+                missing_dependencies=list(row["missing_dependencies"] or []),
+                patch_log=patch_log,
+                notes=list(row["notes"] or []),
+            ),
+            lineage_metadata=LineageMetadata(**lineage_data),
+        )
+
+    # ---- writes ----
+    def put_document(self, metadata: DocumentMetadata, raw_text: str) -> list[Chunk]:
+        from psycopg.types.json import Jsonb
+
+        doc_id = metadata.doc_id
+        ident = metadata.identity_metadata
+        life = metadata.lifecycle_metadata
+        source_uri = self._put_raw_text(doc_id, raw_text)
+
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO documents (
+                    doc_id, doc_type, title, issuer, source_uri, status,
+                    valid_from, valid_until, version, topic_tags, defined_terms,
+                    referenced_terms, review_flags, missing_dependencies, notes
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    doc_id, ident.doc_type, ident.title, ident.issuer, source_uri,
+                    life.status.value, life.valid_from, life.valid_until, life.version,
+                    Jsonb(ident.topic_tags), Jsonb(ident.defined_terms),
+                    Jsonb(ident.referenced_terms), Jsonb(life.review_flags),
+                    Jsonb(life.missing_dependencies), Jsonb(life.notes),
+                ),
+            )
+
+        pieces = chunk_text(raw_text) or [raw_text]
+        chunk_meta = metadata.model_copy(deep=True)
+        chunk_meta.identity_metadata.source_uri = source_uri
+        chunks: list[Chunk] = []
+        with self._conn.cursor() as cur:
+            for idx, piece in enumerate(pieces):
+                cur.execute(
+                    "INSERT INTO chunks (chunk_id, doc_id, chunk_index, text) VALUES (%s,%s,%s,%s)",
+                    (f"{doc_id}#{idx}", doc_id, idx, piece),
+                )
+                piece_meta = chunk_meta.model_copy(deep=True)
+                piece_meta.identity_metadata.chunk_index = idx
+                chunks.append(
+                    Chunk(
+                        chunk_id=f"{doc_id}#{idx}", doc_id=doc_id, chunk_index=idx,
+                        text=piece, metadata=piece_meta,
+                    )
+                )
+
+        self._write_lineage(doc_id, metadata.lineage_metadata)
+        for patch in life.patch_log:
+            self._insert_patch(doc_id, patch)
+        for term, source_doc_id in metadata.lineage_metadata.definition_sources.items():
+            self._upsert_definition_source(doc_id, term, source_doc_id)
+        return chunks
+
+    def _write_lineage(self, doc_id: str, lineage: LineageMetadata) -> None:
+        rows = [
+            (doc_id, field, target)
+            for field in _LINEAGE_FIELDS
+            for target in getattr(lineage, field)
+        ]
+        if not rows:
+            return
+        with self._conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO document_lineage (doc_id, relation, target_doc_id) "
+                "VALUES (%s,%s,%s) ON CONFLICT (doc_id, relation, target_doc_id) DO NOTHING",
+                rows,
+            )
+
+    def _insert_patch(self, doc_id: str, patch: PatchRecord) -> None:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO document_patches "
+                "(doc_id, clause, old_text, new_text, patched_by, effective_date) "
+                "VALUES (%s,%s,%s,%s,%s,%s)",
+                (
+                    doc_id, patch.clause, patch.old_text, patch.new_text,
+                    patch.patched_by, patch.effective_date,
+                ),
+            )
+
+    def _upsert_definition_source(self, doc_id: str, term: str, source_doc_id: str) -> None:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO document_definition_sources (doc_id, term, source_doc_id) "
+                "VALUES (%s,%s,%s) ON CONFLICT (doc_id, term) "
+                "DO UPDATE SET source_doc_id = EXCLUDED.source_doc_id, updated_at = now()",
+                (doc_id, term, source_doc_id),
+            )
+
+    def update_document_status(
+        self, doc_id: str, status: DocStatus, valid_until: str | None = None
+    ) -> None:
+        with self._conn.cursor() as cur:
+            if valid_until is not None:
+                cur.execute(
+                    "UPDATE documents SET status = %s, valid_until = %s WHERE doc_id = %s",
+                    (status.value, valid_until, doc_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE documents SET status = %s WHERE doc_id = %s", (status.value, doc_id)
+                )
+
+    def append_lineage(self, doc_id: str, field: str, value: str) -> None:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO document_lineage (doc_id, relation, target_doc_id) "
+                "VALUES (%s,%s,%s) ON CONFLICT (doc_id, relation, target_doc_id) DO NOTHING",
+                (doc_id, field, value),
+            )
+
+    def set_lifecycle_field(self, doc_id: str, field: str, value: Any) -> None:
+        from psycopg.types.json import Jsonb
+
+        if field == "status":
+            self.update_document_status(doc_id, DocStatus(value))
+            return
+        if field in _LIFECYCLE_SCALAR_FIELDS:
+            with self._conn.cursor() as cur:
+                cur.execute(f"UPDATE documents SET {field} = %s WHERE doc_id = %s", (value, doc_id))
+            return
+        if field in _LIFECYCLE_JSON_LIST_FIELDS:
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE documents SET {field} = %s WHERE doc_id = %s", (Jsonb(value), doc_id)
+                )
+            return
+        raise StorageError(f"S3DbStorage.set_lifecycle_field: unsupported field {field!r}")
+
+    def add_review_flag(self, doc_id: str, flag: str) -> None:
+        from psycopg.types.json import Jsonb
+
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT review_flags FROM documents WHERE doc_id = %s", (doc_id,))
+            row = cur.fetchone()
+            flags = list(row["review_flags"] or [])
+            if flag not in flags:
+                flags.append(flag)
+                cur.execute(
+                    "UPDATE documents SET review_flags = %s WHERE doc_id = %s",
+                    (Jsonb(flags), doc_id),
+                )
+
+    def append_patch_metadata(self, doc_id: str, patch: PatchRecord) -> None:
+        self._insert_patch(doc_id, patch)
+        if patch.patched_by:
+            self.append_lineage(doc_id, "patched_by", patch.patched_by)
+
+    def set_definition_source(self, doc_id: str, term: str, source_doc_id: str) -> None:
+        self._upsert_definition_source(doc_id, term, source_doc_id)
+
+    def snapshot(self) -> dict:
+        result: dict[str, Any] = {}
+        for meta in self.list_documents():
+            raw_text = self.get_document_text(meta.doc_id) or ""
+            stored = StoredDocument(metadata=meta, raw_text=raw_text)
+            result[meta.doc_id] = stored.model_dump(mode="json")
+        return result
+
+
+STORAGE_BACKENDS: tuple[str, ...] = ("memory", "postgres")
+
+
+def get_storage(settings: Settings) -> StorageInterface:
+    if settings.storage_backend == "memory":
+        return InMemoryStorage()
+    if settings.storage_backend == "postgres":
+        return S3DbStorage(settings)
+    raise StorageError(
+        f"Unknown storage backend {settings.storage_backend!r}; expected one of {STORAGE_BACKENDS}"
+    )

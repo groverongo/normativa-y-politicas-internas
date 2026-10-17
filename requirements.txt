@@ -10,3 +10,7 @@ uvicorn[standard]>=0.30
 
 # Optional: only needed to ingest .pdf source documents (see pipeline.load_document_text).
 # pdfplumber>=0.11.0
+
+# Optional: only needed if you set STORAGE_BACKEND=postgres (see .env.example and storage.S3DbStorage).
+# psycopg[binary]>=3.1
+# boto3>=1.34

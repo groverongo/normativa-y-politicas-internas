@@ -8,10 +8,11 @@ section 9.5.
 Run with:
     uvicorn api:app --reload --port 8000
 
-Storage is a single shared, process-lifetime InMemoryStorage instance (per
-the spec, this stands in for the real S3/DB layer being built separately --
-see storage.py's `# TODO: link to real S3/DB client` markers). Optionally
-seed it at startup with SEED_PATH=sample_docs/seed_corpus.json.
+Storage is a single shared, process-lifetime StorageInterface instance (see
+storage.get_storage) -- in-memory by default (STORAGE_BACKEND=memory), or the
+real S3/Postgres-backed storage.S3DbStorage when STORAGE_BACKEND=postgres.
+SEED_PATH=sample_docs/seed_corpus.json preloads it at startup; seeding is only
+supported with the memory backend.
 """
 from __future__ import annotations
 
@@ -30,18 +31,19 @@ from llm_provider import LLMError, LLMProvider, get_provider
 from logging_trace import InteractionLogger
 from pipeline import IngestionPipeline
 from schema import CatalogEntry, DocumentMetadata, IngestionResult
-from storage import InMemoryStorage
+from storage import InMemoryStorage, StorageError, StorageInterface, get_storage
 
 # Populated by `lifespan` on startup (not at import time), so a misconfigured
 # provider or seed file fails with a clear FastAPI startup error instead of
 # crashing module import, and tests can run against a fresh instance per app.
 settings: Settings
 provider: LLMProvider
-storage: InMemoryStorage
+storage: StorageInterface
 
-# InMemoryStorage is not thread-safe, and FastAPI runs sync `def` routes in a
-# thread pool; one lock serializes all storage access (reads and writes) so
-# concurrent requests can't interleave mutations or race with reads.
+# Storage backends are not guaranteed thread-safe (InMemoryStorage isn't, and
+# S3DbStorage holds one shared connection), and FastAPI runs sync `def` routes
+# in a thread pool; one lock serializes all storage access (reads and writes)
+# so concurrent requests can't interleave mutations or race with reads.
 _storage_lock = Lock()
 
 
@@ -56,10 +58,21 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(f"failed to initialize LLM provider at startup: {exc}") from exc
 
     seed_path = os.environ.get("SEED_PATH")
-    try:
-        storage = InMemoryStorage.from_seed_file(Path(seed_path)) if seed_path else InMemoryStorage()
-    except Exception as exc:
-        raise RuntimeError(f"failed to load seed file {seed_path!r}: {exc}") from exc
+    if seed_path and settings.storage_backend != "memory":
+        raise RuntimeError(
+            f"SEED_PATH is only supported with the memory storage backend "
+            f"(STORAGE_BACKEND={settings.storage_backend!r})"
+        )
+    if seed_path:
+        try:
+            storage = InMemoryStorage.from_seed_file(Path(seed_path))
+        except Exception as exc:
+            raise RuntimeError(f"failed to load seed file {seed_path!r}: {exc}") from exc
+    else:
+        try:
+            storage = get_storage(settings)
+        except StorageError as exc:
+            raise RuntimeError(f"failed to initialize storage backend at startup: {exc}") from exc
 
     yield
 
