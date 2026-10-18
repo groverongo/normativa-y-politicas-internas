@@ -1,0 +1,73 @@
+[
+  {
+    "source_file": "sample_docs/examples/01_nuevo_reglamento.txt",
+    "doc_id": "SBS-RES-3000-2024",
+    "final_case": "NEW_STATEMENT",
+    "classification_history": [
+      "NEW_STATEMENT"
+    ],
+    "reclassify_iterations": 0,
+    "missing_dependencies": [],
+    "operations_applied": 1,
+    "impacted_docs": [],
+    "errors": []
+  },
+  {
+    "source_file": "sample_docs/examples/02_sustitucion.txt",
+    "doc_id": "SBS-RES-3001-2024",
+    "final_case": "FULL_REPLACEMENT",
+    "classification_history": [
+      "FULL_REPLACEMENT"
+    ],
+    "reclassify_iterations": 0,
+    "missing_dependencies": [],
+    "operations_applied": 3,
+    "impacted_docs": [],
+    "errors": []
+  },
+  {
+    "source_file": "sample_docs/examples/07_fe_de_erratas.txt",
+    "doc_id": "SBS-RES-3002-2024",
+    "final_case": "PATCH_ERRATUM",
+    "classification_history": [
+      "PATCH_ERRATUM"
+    ],
+    "reclassify_iterations": 0,
+    "missing_dependencies": [],
+    "operations_applied": 2,
+    "impacted_docs": [],
+    "errors": []
+  },
+  {
+    "source_file": "sample_docs/examples/09_redefinicion_termino.txt",
+    "doc_id": "SBS-RES-3003-2024",
+    "final_case": "INDIRECT_DEPENDENCY_UPDATE",
+    "classification_history": [
+      "INDIRECT_DEPENDENCY_UPDATE"
+    ],
+    "reclassify_iterations": 0,
+    "missing_dependencies": [],
+    "operations_applied": 9,
+    "impacted_docs": [
+      "BCP-POL-0050-2022",
+      "SBS-RES-1000-2020"
+    ],
+    "errors": []
+  },
+  {
+    "source_file": "sample_docs/examples/10_dependencia_faltante.txt",
+    "doc_id": "SBS-RES-3004-2024",
+    "final_case": "NEW_STATEMENT",
+    "classification_history": [
+      "REVOCATION_OR_EXPIRATION",
+      "NEW_STATEMENT"
+    ],
+    "reclassify_iterations": 1,
+    "missing_dependencies": [
+      "SBS-RES-9999-2010"
+    ],
+    "operations_applied": 1,
+    "impacted_docs": [],
+    "errors": []
+  }
+]

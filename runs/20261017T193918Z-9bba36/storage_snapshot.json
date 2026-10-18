@@ -1,0 +1,44 @@
+{
+  "SMOKE-API-2024": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SMOKE-API-2024",
+        "chunk_index": 0,
+        "doc_type": "unknown",
+        "title": "",
+        "issuer": "",
+        "topic_tags": [],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": null
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2024-01-01",
+        "valid_until": null,
+        "version": null,
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SMOKE-API-2024\nFecha: 2024-01-01\nTexto de prueba."
+  }
+}

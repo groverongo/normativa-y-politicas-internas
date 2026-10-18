@@ -1,0 +1,15 @@
+[
+  {
+    "source_file": "SMOKE-API-2024",
+    "doc_id": "SMOKE-API-2024",
+    "final_case": "NEW_STATEMENT",
+    "classification_history": [
+      "NEW_STATEMENT"
+    ],
+    "reclassify_iterations": 0,
+    "missing_dependencies": [],
+    "operations_applied": 1,
+    "impacted_docs": [],
+    "errors": []
+  }
+]

@@ -1,0 +1,439 @@
+{
+  "SBS-RES-1000-2020": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-1000-2020",
+        "chunk_index": 0,
+        "doc_type": "reglamento",
+        "title": "Reglamento de Atencion a Clientes en Condicion de Vulnerabilidad",
+        "issuer": "SBS",
+        "topic_tags": [
+          "proteccion al consumidor",
+          "conducta de mercado"
+        ],
+        "defined_terms": [
+          "cliente vulnerable"
+        ],
+        "referenced_terms": [
+          "cliente vulnerable"
+        ],
+        "source_uri": "s3://corpus-demo/sbs-res-1000-2020.pdf"
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2020-03-15",
+        "valid_until": null,
+        "version": "1.0",
+        "review_flags": [
+          "TERM_REDEFINED:cliente vulnerable:SBS-RES-3003-2024"
+        ],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": [
+          "Para efectos del presente reglamento, se entiende por \"cliente vulnerable\" a toda persona natural que, por su edad, estado de salud, nivel educativo, discapacidad o situacion socioeconomica, se encuentre en una posicion de desventaja frente a la empresa del sistema financiero al momento de contratar o usar un producto o servicio financiero.",
+          "Las empresas supervisadas deben implementar canales de atencion preferente, lenguaje claro y procedimientos simplificados de reclamo para todo cliente vulnerable."
+        ]
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {
+          "cliente vulnerable": "SBS-RES-3003-2024"
+        }
+      }
+    },
+    "raw_text": "ID: SBS-RES-1000-2020\nResolucion SBS-RES-1000-2020\nFecha de publicacion: 2020-03-15\n\nReglamento de Atencion a Clientes en Condicion de Vulnerabilidad\n\nArticulo 1.- Objeto. El presente reglamento establece los lineamientos minimos que las empresas del sistema financiero deben observar para la atencion de clientes vulnerables.\n\nArticulo 2.- Definiciones. Para efectos del presente reglamento, se entiende por \"cliente vulnerable\" a toda persona natural que, por su edad, estado de salud, nivel educativo, discapacidad o situacion socioeconomica, se encuentre en una posicion de desventaja frente a la empresa del sistema financiero al momento de contratar o usar un producto o servicio financiero.\n\nArticulo 3.- Obligaciones. Las empresas supervisadas deben implementar canales de atencion preferente, lenguaje claro y procedimientos simplificados de reclamo para todo cliente vulnerable.\n\nEl presente reglamento entra en vigencia el 2020-03-15."
+  },
+  "SBS-RES-2000-2021": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-2000-2021",
+        "chunk_index": 0,
+        "doc_type": "resolucion",
+        "title": "Resolucion sobre Limites de Comisiones por Mantenimiento de Cuenta de Ahorros",
+        "issuer": "SBS",
+        "topic_tags": [
+          "comisiones",
+          "cuentas de ahorro"
+        ],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": "s3://corpus-demo/sbs-res-2000-2021.pdf"
+      },
+      "lifecycle_metadata": {
+        "status": "SUPERSEDED",
+        "valid_from": "2021-06-01",
+        "valid_until": "2024-02-20",
+        "version": "1.0",
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [
+          "SBS-RES-3001-2024"
+        ],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SBS-RES-2000-2021\nResolucion SBS-RES-2000-2021\nFecha de publicacion: 2021-06-01\n\nResolucion sobre Limites de Comisiones por Mantenimiento de Cuenta de Ahorros\n\nArticulo 1.- Las empresas del sistema financiero no podran cobrar una comision por mantenimiento de cuenta de ahorros superior al equivalente de 2.5% de la Unidad Impositiva Tributaria vigente.\n\nArticulo 2.- La presente resolucion rige a partir del 2021-06-01."
+  },
+  "SBS-RES-2001-2021": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-2001-2021",
+        "chunk_index": 0,
+        "doc_type": "resolucion",
+        "title": "Resolucion sobre Plazos de Atencion de Reclamos",
+        "issuer": "SBS",
+        "topic_tags": [
+          "reclamos",
+          "atencion al cliente"
+        ],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": "s3://corpus-demo/sbs-res-2001-2021.pdf"
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2021-07-10",
+        "valid_until": null,
+        "version": "1.0",
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [
+          {
+            "clause": "clause-1",
+            "old_text": "",
+            "new_text": "",
+            "patched_by": "SBS-RES-3002-2024",
+            "effective_date": "2024-03-05"
+          }
+        ],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [
+          "SBS-RES-3002-2024"
+        ],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SBS-RES-2001-2021\nResolucion SBS-RES-2001-2021\nFecha de publicacion: 2021-07-10\n\nResolucion sobre Plazos de Atencion de Reclamos\n\nArticulo 5.- Las empresas del sistema financiero deben resolver los reclamos presentados por los usuarios en un plazo maximo de treinta (30) dias habiles contados desde la fecha de presentacion.\n\nArticulo 6.- La presente resolucion rige a partir del 2021-07-10."
+  },
+  "BCP-POL-0050-2022": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "BCP-POL-0050-2022",
+        "chunk_index": 0,
+        "doc_type": "politica_interna",
+        "title": "Politica Interna de Atencion Preferente a Clientes Vulnerables",
+        "issuer": "BCP",
+        "topic_tags": [
+          "atencion al cliente",
+          "proteccion al consumidor"
+        ],
+        "defined_terms": [],
+        "referenced_terms": [
+          "cliente vulnerable"
+        ],
+        "source_uri": "s3://corpus-demo/bcp-pol-0050-2022.pdf"
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2022-02-01",
+        "valid_until": null,
+        "version": "1.0",
+        "review_flags": [
+          "TERM_REDEFINED:cliente vulnerable:SBS-RES-3003-2024"
+        ],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": [
+          "Esta politica interna desarrolla, en el ambito del banco, lo dispuesto por la SBS respecto de la atencion al cliente vulnerable.",
+          "Todo colaborador de atencion al publico debe identificar a un cliente vulnerable siguiendo los criterios de edad, discapacidad y situacion socioeconomica, y aplicar el protocolo de atencion preferente."
+        ]
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {
+          "cliente vulnerable": "SBS-RES-3003-2024"
+        }
+      }
+    },
+    "raw_text": "ID: BCP-POL-0050-2022\nPolitica interna BCP-POL-0050-2022\nFecha de publicacion: 2022-02-01\n\nPolitica Interna de Atencion Preferente a Clientes Vulnerables\n\n1. Objetivo. Esta politica interna desarrolla, en el ambito del banco, lo dispuesto por la SBS respecto de la atencion al cliente vulnerable.\n\n2. Alcance. Todo colaborador de atencion al publico debe identificar a un cliente vulnerable siguiendo los criterios de edad, discapacidad y situacion socioeconomica, y aplicar el protocolo de atencion preferente.\n\n3. Vigencia. La presente politica interna rige desde el 2022-02-01."
+  },
+  "SBS-RES-3000-2024": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-3000-2024",
+        "chunk_index": 0,
+        "doc_type": "unknown",
+        "title": "",
+        "issuer": "",
+        "topic_tags": [],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": null
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2024-01-15",
+        "valid_until": null,
+        "version": null,
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SBS-RES-3000-2024\nResolucion SBS-RES-3000-2024\nFecha de publicacion: 2024-01-15\n\nNuevo Reglamento de Debida Diligencia en la Apertura de Cuentas Digitales\n\nArticulo 1.- Objeto. Mediante la presente resolucion se aprueba y se establece el Reglamento de Debida Diligencia en la Apertura de Cuentas Digitales, aplicable a toda empresa del sistema financiero que ofrezca productos de apertura remota.\n\nArticulo 2.- Alcance. Se crea un procedimiento unico de verificacion de identidad biometrica para la apertura de cuentas digitales, el cual sera de cumplimiento obligatorio.\n\nArticulo 3.- Vigencia. El presente reglamento entra en vigencia el 2024-01-15. Se trata de una materia no regulada anteriormente por la Superintendencia.\n"
+  },
+  "SBS-RES-3001-2024": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-3001-2024",
+        "chunk_index": 0,
+        "doc_type": "unknown",
+        "title": "",
+        "issuer": "",
+        "topic_tags": [],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": null
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2024-02-20",
+        "valid_until": null,
+        "version": null,
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [
+          "SBS-RES-2000-2021"
+        ],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SBS-RES-3001-2024\nResolucion SBS-RES-3001-2024\nFecha de publicacion: 2024-02-20\n\nResolucion que Sustituye el Regimen de Comisiones por Mantenimiento de Cuenta\n\nArticulo 1.- Objeto. La presente resolucion sustituye en su integridad a la Resolucion SBS-RES-2000-2021, que establecia limites de comisiones por mantenimiento de cuenta de ahorros.\n\nArticulo 2.- Nuevo limite. A partir de la vigencia de la presente norma, la comision por mantenimiento de cuenta de ahorros no podra exceder el equivalente de 1.5% de la Unidad Impositiva Tributaria.\n\nArticulo 3.- Vigencia. La presente resolucion entra en vigencia el 2024-02-20, fecha desde la cual la Resolucion SBS-RES-2000-2021 deja de ser aplicable.\n"
+  },
+  "SBS-RES-3002-2024": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-3002-2024",
+        "chunk_index": 0,
+        "doc_type": "fe_de_erratas",
+        "title": "",
+        "issuer": "",
+        "topic_tags": [],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": null
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2024-03-05",
+        "valid_until": null,
+        "version": null,
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [
+          "SBS-RES-2001-2021"
+        ],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SBS-RES-3002-2024\nResolucion SBS-RES-3002-2024\nFecha de publicacion: 2024-03-05\n\nFe de Erratas de la Resolucion SBS-RES-2001-2021\n\nMediante la presente se emite fe de erratas respecto del Articulo 5 de la Resolucion SBS-RES-2001-2021, sobre plazos de atencion de reclamos.\n\nClausula: Articulo 5.\nDonde dice: \"treinta (30) dias habiles\"\nDebe decir: \"quince (15) dias habiles\"\n\nLa presente fe de erratas corrige unicamente el plazo senalado y entra en vigencia el 2024-03-05, sin alterar el resto del articulado de la Resolucion SBS-RES-2001-2021.\n"
+  },
+  "SBS-RES-3003-2024": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-3003-2024",
+        "chunk_index": 0,
+        "doc_type": "unknown",
+        "title": "",
+        "issuer": "",
+        "topic_tags": [],
+        "defined_terms": [
+          "cliente vulnerable"
+        ],
+        "referenced_terms": [],
+        "source_uri": null
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2024-04-12",
+        "valid_until": null,
+        "version": null,
+        "review_flags": [],
+        "missing_dependencies": [],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [
+          "BCP-POL-0050-2022",
+          "SBS-RES-1000-2020"
+        ],
+        "definition_sources": {
+          "cliente vulnerable": "SBS-RES-3003-2024"
+        }
+      }
+    },
+    "raw_text": "ID: SBS-RES-3003-2024\nResolucion SBS-RES-3003-2024\nFecha de publicacion: 2024-04-12\n\nResolucion que Precisa el Concepto de Cliente Vulnerable\n\nArticulo 1.- Objeto. Para efectos de la supervision de conducta de mercado, se entiende por \"cliente vulnerable\" a toda persona natural que acredite al menos una de las siguientes condiciones: (i) edad igual o mayor a 70 anos, (ii) discapacidad certificada, o (iii) pertenencia a un hogar en situacion de pobreza segun la clasificacion oficial vigente.\n\nArticulo 2.- Alcance. Esta nueva definicion debe ser observada por todas las empresas del sistema financiero y sus politicas internas que hagan referencia al concepto de cliente vulnerable, las cuales mantienen plena vigencia bajo el criterio aqui precisado.\n\nArticulo 3.- Vigencia. La presente resolucion entra en vigencia el 2024-04-12.\n"
+  },
+  "SBS-RES-3004-2024": {
+    "metadata": {
+      "identity_metadata": {
+        "doc_id": "SBS-RES-3004-2024",
+        "chunk_index": 0,
+        "doc_type": "unknown",
+        "title": "",
+        "issuer": "",
+        "topic_tags": [],
+        "defined_terms": [],
+        "referenced_terms": [],
+        "source_uri": null
+      },
+      "lifecycle_metadata": {
+        "status": "ACTIVE",
+        "valid_from": "2024-05-01",
+        "valid_until": null,
+        "version": null,
+        "review_flags": [
+          "MISSING_DEPENDENCY"
+        ],
+        "missing_dependencies": [
+          "SBS-RES-9999-2010"
+        ],
+        "patch_log": [],
+        "notes": []
+      },
+      "lineage_metadata": {
+        "supersedes": [],
+        "superseded_by": [],
+        "amends": [],
+        "patched_by": [],
+        "consolidates": [],
+        "split_from": [],
+        "split_into": [],
+        "contradicts": [],
+        "revokes": [],
+        "revoked_by": [],
+        "overrides": [],
+        "overridden_by": [],
+        "impacts": [],
+        "definition_sources": {}
+      }
+    },
+    "raw_text": "ID: SBS-RES-3004-2024\nResolucion SBS-RES-3004-2024\nFecha de publicacion: 2024-05-01\n\nResolucion que Deroga Disposiciones sobre Encaje Minimo en Moneda Extranjera\n\nArticulo 1.- Objeto. La presente resolucion deroga en su totalidad a la Resolucion SBS-RES-9999-2010, sobre encaje minimo en moneda extranjera, la cual queda sin efecto a partir de la fecha de publicacion.\n\nArticulo 2.- Vigencia. La presente resolucion entra en vigencia el 2024-05-01.\n"
+  }
+}
