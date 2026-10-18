@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bring up both modules via the root docker-compose.yml, making sure each
+# Bring up every module via the root docker-compose.yml, making sure each
 # module has its own .env (copied from .env.example if missing) before the
 # build starts -- compose's env_file: directive fails hard if the file is
 # absent.
@@ -7,12 +7,12 @@
 # Usage:
 #   ./docker-up.sh                 # equivalent to: docker compose up --build
 #   ./docker-up.sh up --build api  # any args are passed through to `docker compose`
-#   ./docker-up.sh down            # tear down both modules
+#   ./docker-up.sh down            # tear down every module
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-MODULES=(ingesta nttbanca-n)
+MODULES=(ingesta nttbanca-n nttdatabanca)
 
 for m in "${MODULES[@]}"; do
   env_file="modules/$m/.env"
