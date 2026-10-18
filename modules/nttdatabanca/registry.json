@@ -5,8 +5,8 @@
     "titulo": "Circular SBS sobre gestión de la continuidad del negocio",
     "tipo": "norma_sbs",
     "archivo": "corpus/sbs-g139-2009.pdf",
-    "url": "",
-    "fecha": "",
+    "url": "https://intranet2.sbs.gob.pe/dv_int_cn/246/v1.0/Adjuntos/g-139-2009.c.pdf",
+    "fecha": "2009-04-02",
     "derogado_por": "sbs-877-2020"
   },
   {
@@ -15,8 +15,8 @@
     "titulo": "Reglamento para la Gestión de la Continuidad del Negocio",
     "tipo": "norma_sbs",
     "archivo": "corpus/sbs-877-2020.pdf",
-    "url": "",
-    "fecha": "2020",
+    "url": "https://intranet2.sbs.gob.pe/dv_int_cn/1894/v1.0/Adjuntos/877-2020.R.pdf",
+    "fecha": "2020-02-26",
     "vigente_desde": "2022-01-01",
     "modificado_por": ["sbs-1536-2020"]
   },
@@ -35,8 +35,8 @@
     "titulo": "Reglamento para la Gestión del Riesgo Operacional",
     "tipo": "norma_sbs",
     "archivo": "corpus/sbs-2116-2009.pdf",
-    "url": "",
-    "fecha": "2009",
+    "url": "https://intranet2.sbs.gob.pe/dv_int_cn/842/v1.0/Adjuntos/2116-2009.r.pdf",
+    "fecha": "2009-04-02",
     "modificado_por": ["sbs-877-2020"]
   },
   {
@@ -45,8 +45,8 @@
     "titulo": "Reglamento de Gobierno Corporativo y de la Gestión Integral de Riesgos",
     "tipo": "norma_sbs",
     "archivo": "corpus/sbs-272-2017.pdf",
-    "url": "",
-    "fecha": "2017",
+    "url": "https://intranet2.sbs.gob.pe/dv_int_cn/1708/v1.0/Adjuntos/272-2017.R.pdf",
+    "fecha": "2017-01-18",
     "modificado_por": ["sbs-877-2020"]
   },
   {
@@ -55,8 +55,8 @@
     "titulo": "Reglamento para la Gestión de la Seguridad de la Información y la Ciberseguridad",
     "tipo": "norma_sbs",
     "archivo": "corpus/sbs-504-2021.pdf",
-    "url": "",
-    "fecha": "2021"
+    "url": "https://intranet2.sbs.gob.pe/dv_int_cn/2046/v2.0/Adjuntos/504-2021.R.pdf",
+    "fecha": "2021-02-19"
   },
   {
     "doc_id": "int-pol-continuidad-v1",
